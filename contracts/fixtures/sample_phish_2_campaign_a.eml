@@ -1,0 +1,22 @@
+From: no-reply@micros0ft-support.com
+To: employee@targetcorp.com
+Subject: Action Required: Reset your Microsoft 365 password now
+Date: Thu, 03 Sep 2026 12:00:00 +0000
+Message-ID: <phish-002@micros0ft-support.com>
+Reply-To: steal@credentials-farm.net
+MIME-Version: 1.0
+Content-Type: text/plain
+Received: from smtp.shared-evil.net (smtp.shared-evil.net [185.220.101.45])
+        by mx.targetcorp.com (Postfix) with ESMTP
+        for <employee@targetcorp.com>; Thu, 03 Sep 2026 12:00:00 +0000
+
+Hello,
+
+We detected unusual sign-in activity on your Microsoft 365 account.
+To secure your account, you must reset your password immediately.
+
+Click here to reset: http://micros0ft-support.com/reset?id=XYZ987
+
+If you do not act within 12 hours, your account access will be revoked.
+
+Microsoft Support Team

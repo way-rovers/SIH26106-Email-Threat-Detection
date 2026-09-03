@@ -1,0 +1,22 @@
+From: helpdesk@micros0ft-support.com
+To: cfo@targetcorp.com
+Subject: Your Microsoft 365 subscription expires today — renew now
+Date: Thu, 03 Sep 2026 13:00:00 +0000
+Message-ID: <phish-003@micros0ft-support.com>
+Reply-To: steal@credentials-farm.net
+MIME-Version: 1.0
+Content-Type: text/plain
+Received: from smtp.shared-evil.net (smtp.shared-evil.net [185.220.101.45])
+        by mx.targetcorp.com (Postfix) with ESMTP
+        for <cfo@targetcorp.com>; Thu, 03 Sep 2026 13:00:00 +0000
+
+Dear Microsoft 365 Subscriber,
+
+Your subscription is set to expire today. To avoid service interruption,
+please renew your plan immediately by visiting the link below.
+
+http://micros0ft-support.com/renew?id=ABC456
+
+Failure to renew will result in loss of access to all Microsoft 365 services.
+
+Microsoft Billing Team

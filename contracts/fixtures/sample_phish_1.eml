@@ -1,0 +1,22 @@
+From: security@paypa1.com
+To: victim@example.com
+Subject: Urgent: Verify your account immediately!
+Date: Thu, 03 Sep 2026 11:00:00 +0000
+Message-ID: <phish-001@paypa1.com>
+Reply-To: harvest@evil-collector.com
+MIME-Version: 1.0
+Content-Type: text/plain
+Received: from mail.evil-relay.ru (mail.evil-relay.ru [185.220.101.45])
+        by mx.example.com (Postfix) with ESMTP
+        for <victim@example.com>; Thu, 03 Sep 2026 11:00:00 +0000
+
+Dear Customer,
+
+Your PayPal account has been limited. Click the link below to verify your identity
+and restore full access within 24 hours or your account will be permanently suspended.
+
+http://paypa1.com/verify?token=abc123FAKE
+
+This is an automated message — do not reply.
+
+PayPal Security Team

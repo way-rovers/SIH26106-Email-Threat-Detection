@@ -1,0 +1,13 @@
+email-validator
+checkdmarc
+dkimpy
+python-Levenshtein
+scikit-learn
+pandas
+networkx
+requests
+streamlit
+folium
+streamlit-folium
+pytest
+python-dotenv
