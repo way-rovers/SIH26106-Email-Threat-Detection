@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Markdowns
+00_init_prompt.md
+01_master_context.md
