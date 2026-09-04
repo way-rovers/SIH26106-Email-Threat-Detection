@@ -28,3 +28,26 @@ def test_check_domain_domain_field_matches_input():
     result = check_domain(domain)
     assert result["domain"] == domain, \
         "domain field must echo back the input domain"
+def test_exact_trusted_domain_is_safe():
+    result = check_domain("paypal.com")
+    assert result["is_suspicious"] is False
+
+
+def test_digit_substitution_is_detected():
+    result = check_domain("paypa1.com")
+    assert result["is_suspicious"] is True
+
+
+def test_micros0ft_is_detected():
+    result = check_domain("micros0ft.com")
+    assert result["is_suspicious"] is True
+
+
+def test_google_typo_is_detected():
+    result = check_domain("go0gle.com")
+    assert result["is_suspicious"] is True
+
+
+def test_unrelated_domain_is_safe():
+    result = check_domain("example.com")
+    assert result["is_suspicious"] is False
