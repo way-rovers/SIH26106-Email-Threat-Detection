@@ -82,7 +82,8 @@
 - Target 1 is complete.
 - Target 2 is complete.
 - Target 3 is complete.
-- Target 4 is now complete; Target 5 is the next target.
+- Target 4 is complete.
+- Target 5 is now complete; all planned Person 5 targets are complete.
 - The pinned public API and return field names are frozen.
 - The detector will remain self-contained and will not add live DNS or
   external API calls.
@@ -116,6 +117,10 @@
   before the suffix (for example, `micros0ft-support.com`). This is a narrow
   brand-impersonation rule and does not increase the ordinary distance
   threshold or treat arbitrary suffixes as trusted.
+- Integration remains contract-only: the pipeline receives the unchanged
+  five-field typosquat result, scoring can read `is_suspicious`, and
+  correlation can read `closest_match`. No scoring or correlation behavior
+  was changed for Target 5.
 
 ## Files changed
 
@@ -128,7 +133,8 @@
   ASCII, Unicode edge-case, and shared-fixture sender-domain tests.
 - `typosquat/watchlist.json` — add `bank-of-america.com` and keep the starter
   domains sorted.
-- `process.md` — update the execution log and mark Target 4 complete.
+- `process.md` — record final integration and regression results; mark Target
+  5 complete.
 
 No files outside the Person 5 module and its process log were changed.
 
@@ -144,6 +150,15 @@ No files outside the Person 5 module and its process log were changed.
 - `py -3.12 -m pytest -q` — passed, 44 tests.
 - `py -3.12 -m pytest -q` — passed, 49 tests after Target 3.
 - `py -3.12 -m pytest -q` — passed, 55 tests after Target 4.
+- `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 32 tests in
+  final Target 5 validation.
+- `py -3.12 -m pytest -q` — passed, 55 tests in final Target 5 validation.
+- `py -3.12 run_demo.py` — passed; the phishing fixture produced a suspicious
+  typosquat result with `closest_match: "paypal.com"`, and the combined
+  record included scoring and correlation outputs.
+- Python 3.12 integration assertion with a malformed sender domain — passed;
+  the pipeline returned the exact five-field safe typosquat result without an
+  exception.
 - Fixture header inspection — completed; sender domains found were
   `bank-of-america.com`, `paypa1.com`, and `micros0ft-support.com`.
 - `git diff --check` — passed.
@@ -161,7 +176,10 @@ No files outside the Person 5 module and its process log were changed.
   broader Unicode confusable coverage is outside this target.
 - The first Target 4 run failed because of a missing comma in the updated JSON
   watchlist; the syntax was corrected and the focused suite then passed.
+- No integration or regression problems were found during Target 5.
 
 ## Next target
 
-Target 5: verify integration readiness and complete the final regression pass.
+All planned Person 5 targets are complete. No further module target is
+scheduled; future changes should be coordinated with the owning integration
+team members and preserve the pinned contract.
