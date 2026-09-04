@@ -98,6 +98,21 @@ def normalize_homoglyphs(domain):
     return "".join(HOMOGLYPH_MAP.get(character, character) for character in domain)
 
 
+def find_brand_suffix_match(domain, watchlist):
+    """Find a close brand typo used as the first part of a hyphenated label."""
+    first_label = domain.split(".", 1)[0]
+    if "-" not in first_label:
+        return None
+
+    brand_label = first_label.split("-", 1)[0]
+    for watchlist_domain in watchlist:
+        watchlist_label = watchlist_domain.split(".", 1)[0]
+        if brand_label != watchlist_label and levenshtein(brand_label, watchlist_label) <= 2:
+            return watchlist_domain
+
+    return None
+
+
 def check_domain(domain: str) -> dict:
     """Check whether a domain looks like an impersonation of a known brand."""
 
@@ -142,6 +157,16 @@ def check_domain(domain: str) -> dict:
                     "distance": levenshtein(domain, watchlist_domain),
                     "match_type": "homoglyph",
                 }
+
+    brand_suffix_match = find_brand_suffix_match(domain, watchlist)
+    if brand_suffix_match is not None:
+        return {
+            "domain": original_domain,
+            "is_suspicious": True,
+            "closest_match": brand_suffix_match,
+            "distance": levenshtein(domain, brand_suffix_match),
+            "match_type": "edit_distance",
+        }
 
     is_suspicious = (
         domain != closest_match

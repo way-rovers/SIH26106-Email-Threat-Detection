@@ -1,9 +1,13 @@
-"""typosquat/test_typosquat.py — shape-check tests for check_domain()."""
+"""typosquat/test_typosquat.py — tests for check_domain()."""
+
+from email.parser import Parser
+from pathlib import Path
 
 import pytest
 from typosquat.main import check_domain, levenshtein
 
 REQUIRED_KEYS = {"domain", "is_suspicious", "closest_match", "distance", "match_type"}
+FIXTURES = Path(__file__).parents[1] / "contracts" / "fixtures"
 
 
 def test_check_domain_returns_dict():
@@ -81,6 +85,36 @@ def test_ascii_trusted_domain_keeps_existing_safe_behavior():
         "distance": None,
         "match_type": None,
     }
+
+
+@pytest.mark.parametrize(
+    ("fixture_name", "is_suspicious"),
+    [
+        ("sample_legit_1.eml", False),
+        ("sample_phish_1.eml", True),
+        ("sample_phish_2_campaign_a.eml", True),
+        ("sample_phish_3_campaign_a.eml", True),
+    ],
+)
+def test_shared_fixture_sender_domains_have_expected_results(fixture_name, is_suspicious):
+    message = Parser().parsestr((FIXTURES / fixture_name).read_text(encoding="utf-8"))
+    sender_domain = message["From"].rsplit("@", 1)[1]
+
+    result = check_domain(sender_domain)
+
+    assert result["is_suspicious"] is is_suspicious
+
+
+def test_hyphenated_legitimate_bank_domain_is_trusted():
+    result = check_domain("bank-of-america.com")
+    assert result["is_suspicious"] is False
+
+
+def test_typo_with_deceptive_brand_suffix_is_detected():
+    result = check_domain("micros0ft-support.com")
+    assert result["is_suspicious"] is True
+    assert result["closest_match"] == "microsoft.com"
+    assert result["match_type"] == "edit_distance"
 
 
 @pytest.mark.parametrize("domain", ["pаypal.", "\u0370aypal.com", "\x00"])

@@ -81,7 +81,8 @@
 
 - Target 1 is complete.
 - Target 2 is complete.
-- Target 3 is now complete; Target 4 is the next target.
+- Target 3 is complete.
+- Target 4 is now complete; Target 5 is the next target.
 - The pinned public API and return field names are frozen.
 - The detector will remain self-contained and will not add live DNS or
   external API calls.
@@ -106,16 +107,28 @@
 - A supported homoglyph match takes precedence over the ordinary distance
   result and reports the raw domain distance plus `match_type: "homoglyph"`.
   Unsupported Unicode remains on the existing safe distance path.
+- The watchlist now includes the legitimate fixture domain
+  `bank-of-america.com` alongside `bankofamerica.com`, preventing a false
+  positive for the shared legitimate fixture. It retains the required brands,
+  multiple bank domains, and `sbi.co.in`; no separate institution domain is
+  named in the project context.
+- Hyphenated first-label domains are checked for a close typo in the prefix
+  before the suffix (for example, `micros0ft-support.com`). This is a narrow
+  brand-impersonation rule and does not increase the ordinary distance
+  threshold or treat arbitrary suffixes as trusted.
 
 ## Files changed
 
 - `typosquat/main.py` — reject non-string and empty normalized inputs before
   matching; calculate Damerau-Levenshtein distance and detect supported
-  homoglyph matches.
+  homoglyph matches; detect close brand typos followed by a hyphenated label
+  suffix.
 - `typosquat/test_typosquat.py` — add parameterized exact-result tests for
   malformed and empty inputs plus edit-operation, transposition, homoglyph,
-  ASCII, and Unicode edge-case tests.
-- `process.md` — update the execution log and mark Target 3 complete.
+  ASCII, Unicode edge-case, and shared-fixture sender-domain tests.
+- `typosquat/watchlist.json` — add `bank-of-america.com` and keep the starter
+  domains sorted.
+- `process.md` — update the execution log and mark Target 4 complete.
 
 No files outside the Person 5 module and its process log were changed.
 
@@ -126,8 +139,11 @@ No files outside the Person 5 module and its process log were changed.
   after Target 2.
 - `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 26 tests
   after Target 3.
+- `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 32 tests
+  after Target 4.
 - `py -3.12 -m pytest -q` — passed, 44 tests.
 - `py -3.12 -m pytest -q` — passed, 49 tests after Target 3.
+- `py -3.12 -m pytest -q` — passed, 55 tests after Target 4.
 - Fixture header inspection — completed; sender domains found were
   `bank-of-america.com`, `paypa1.com`, and `micros0ft-support.com`.
 - `git diff --check` — passed.
@@ -143,7 +159,9 @@ No files outside the Person 5 module and its process log were changed.
 - No new problems were found during Target 2 validation.
 - The explicit mapping intentionally covers common Cyrillic lookalikes only;
   broader Unicode confusable coverage is outside this target.
+- The first Target 4 run failed because of a missing comma in the updated JSON
+  watchlist; the syntax was corrected and the focused suite then passed.
 
 ## Next target
 
-Target 4: review watchlist coverage and add shared-fixture regression cases.
+Target 5: verify integration readiness and complete the final regression pass.

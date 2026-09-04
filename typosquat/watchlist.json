@@ -1,15 +1,16 @@
 {
   "watchlist": [
-    "paypal.com",
-    "microsoft.com",
-    "google.com",
     "apple.com",
     "amazon.com",
-    "chase.com",
-    "wellsfargo.com",
+    "bank-of-america.com",
     "bankofamerica.com",
+    "chase.com",
+    "google.com",
     "irs.gov",
-    "sbi.co.in"
+    "microsoft.com",
+    "paypal.com",
+    "sbi.co.in",
+    "wellsfargo.com"
   ],
   "notes": "Add your institution's domain here. Keep sorted alphabetically."
 }
