@@ -28,6 +28,19 @@ def test_check_domain_domain_field_matches_input():
     result = check_domain(domain)
     assert result["domain"] == domain, \
         "domain field must echo back the input domain"
+
+
+@pytest.mark.parametrize("domain", [None, "", "   ", "://", "http:///path", 123, b"paypal.com"])
+def test_invalid_or_empty_domain_returns_safe_contract_result(domain):
+    assert check_domain(domain) == {
+        "domain": domain,
+        "is_suspicious": False,
+        "closest_match": None,
+        "distance": None,
+        "match_type": None,
+    }
+
+
 def test_exact_trusted_domain_is_safe():
     result = check_domain("paypal.com")
     assert result["is_suspicious"] is False

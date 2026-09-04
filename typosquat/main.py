@@ -41,6 +41,9 @@ def levenshtein(a, b):
 
 def normalize_domain(domain):
     """Normalize a domain for comparison."""
+    if not isinstance(domain, str):
+        return ""
+
     domain = domain.strip().lower()
 
     if "://" in domain:
@@ -60,6 +63,15 @@ def check_domain(domain: str) -> dict:
 
     original_domain = domain
     domain = normalize_domain(domain)
+
+    if not domain:
+        return {
+            "domain": original_domain,
+            "is_suspicious": False,
+            "closest_match": None,
+            "distance": None,
+            "match_type": None,
+        }
 
     watchlist = load_watchlist()
 
