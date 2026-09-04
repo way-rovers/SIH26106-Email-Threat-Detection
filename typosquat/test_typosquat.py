@@ -1,7 +1,7 @@
 """typosquat/test_typosquat.py — shape-check tests for check_domain()."""
 
 import pytest
-from typosquat.main import check_domain
+from typosquat.main import check_domain, levenshtein
 
 REQUIRED_KEYS = {"domain", "is_suspicious", "closest_match", "distance", "match_type"}
 
@@ -39,6 +39,30 @@ def test_invalid_or_empty_domain_returns_safe_contract_result(domain):
         "distance": None,
         "match_type": None,
     }
+
+
+@pytest.mark.parametrize(
+    ("source", "target"),
+    [
+        ("paypa1.com", "paypal.com"),
+        ("paypall.com", "paypal.com"),
+        ("paypl.com", "paypal.com"),
+    ],
+)
+def test_single_edit_distance_is_one(source, target):
+    assert levenshtein(source, target) == 1
+
+
+def test_adjacent_transposition_distance_is_one():
+    assert levenshtein("mircosoft.com", "microsoft.com") == 1
+
+
+def test_adjacent_transposition_is_detected_by_check_domain():
+    result = check_domain("mircosoft.com")
+    assert result["is_suspicious"] is True
+    assert result["closest_match"] == "microsoft.com"
+    assert result["distance"] == 1
+    assert result["match_type"] == "edit_distance"
 
 
 def test_exact_trusted_domain_is_safe():

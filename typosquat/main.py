@@ -21,22 +21,47 @@ def load_watchlist():
 
 
 def levenshtein(a, b):
-    """Calculate Levenshtein edit distance between two strings."""
-    previous = list(range(len(b) + 1))
+    """Calculate Damerau-Levenshtein distance between two strings."""
+    a_length = len(a)
+    b_length = len(b)
+    max_distance = a_length + b_length
+    distances = [[0] * (b_length + 2) for _ in range(a_length + 2)]
+    last_row = {}
 
-    for i, char_a in enumerate(a, 1):
-        current = [i]
+    distances[0][0] = max_distance
+    for index in range(a_length + 1):
+        distances[index + 1][0] = max_distance
+        distances[index + 1][1] = index
 
-        for j, char_b in enumerate(b, 1):
-            insert = current[j - 1] + 1
-            delete = previous[j] + 1
-            replace = previous[j - 1] + (char_a != char_b)
+    for index in range(b_length + 1):
+        distances[0][index + 1] = max_distance
+        distances[1][index + 1] = index
 
-            current.append(min(insert, delete, replace))
+    for a_index, char_a in enumerate(a, 1):
+        last_matching_b_index = 0
 
-        previous = current
+        for b_index, char_b in enumerate(b, 1):
+            previous_matching_a_index = last_row.get(char_b, 0)
+            previous_matching_b_index = last_matching_b_index
+            substitution_cost = 1
 
-    return previous[-1]
+            if char_a == char_b:
+                substitution_cost = 0
+                last_matching_b_index = b_index
+
+            distances[a_index + 1][b_index + 1] = min(
+                distances[a_index][b_index] + substitution_cost,
+                distances[a_index + 1][b_index] + 1,
+                distances[a_index][b_index + 1] + 1,
+                distances[previous_matching_a_index][previous_matching_b_index]
+                + (a_index - previous_matching_a_index - 1)
+                + 1
+                + (b_index - previous_matching_b_index - 1),
+            )
+
+        last_row[char_a] = a_index
+
+    return distances[a_length + 1][b_length + 1]
 
 
 def normalize_domain(domain):

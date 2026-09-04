@@ -78,6 +78,7 @@
 ## Decisions made
 
 - Target 1 is complete; Target 2 is the next target.
+- Target 2 is now complete; Target 3 is the next target.
 - The pinned public API and return field names are frozen.
 - The detector will remain self-contained and will not add live DNS or
   external API calls.
@@ -89,20 +90,29 @@
 - Invalid input is defined here as a non-string value or a string that becomes
   empty after the existing normalization steps. These inputs return the safe
   contract result without attempting watchlist matching.
+- The existing `distance <= 2` suspicion threshold is retained. Damerau-
+  Levenshtein changes transposition costs while keeping the established
+  sensitivity for one- and two-edit substitutions, insertions, and deletions.
+- The distance helper uses the standard dynamic-programming matrix with last
+  matching-character positions, supporting adjacent transposition as one
+  edit without adding dependencies.
 
 ## Files changed
 
 - `typosquat/main.py` — reject non-string and empty normalized inputs before
-  matching.
+  matching; calculate Damerau-Levenshtein distance for watchlist matching.
 - `typosquat/test_typosquat.py` — add parameterized exact-result tests for
-  malformed and empty inputs.
-- `process.md` — update the execution log and mark Target 1 complete.
+  malformed and empty inputs plus edit-operation and transposition tests.
+- `process.md` — update the execution log and mark Target 2 complete.
 
 No files outside the Person 5 module and its process log were changed.
 
 ## Tests run and results
 
 - `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 16 tests.
+- `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 21 tests
+  after Target 2.
+- `py -3.12 -m pytest -q` — passed, 44 tests.
 - Fixture header inspection — completed; sender domains found were
   `bank-of-america.com`, `paypa1.com`, and `micros0ft-support.com`.
 - `git diff --check` — passed.
@@ -115,8 +125,9 @@ No files outside the Person 5 module and its process log were changed.
 - The current whole-domain comparison may miss the required
   `micros0ft-support.com` phishing fixture; brand-label comparison or a
   carefully scoped suffix policy needs to be decided in a later target.
+- No new problems were found during Target 2 validation.
 
 ## Next target
 
-Target 2: replace ordinary Levenshtein comparison with
-Damerau-Levenshtein matching and add focused transposition tests.
+Target 3: implement constrained homoglyph detection and add focused
+Unicode/mixed-script tests.
