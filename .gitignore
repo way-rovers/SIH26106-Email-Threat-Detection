@@ -217,9 +217,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Markdowns
-00_init_prompt.md
-01_master_context.md
+# Markdowns & Context files
+0[0-9]_*.md
+process.md
 
 # ── Project-specific ─────────────────────────────────────────────────────── #
 

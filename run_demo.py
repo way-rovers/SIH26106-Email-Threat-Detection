@@ -15,6 +15,12 @@ from dashboard.pipeline import run_pipeline
 
 EML_PATH = "contracts/fixtures/sample_phish_1.eml"
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 
 def main():
     print(f"Running pipeline on: {EML_PATH}\n{'=' * 60}")
