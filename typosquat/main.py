@@ -9,6 +9,16 @@ from pathlib import Path
 
 WATCHLIST_FILE = Path(__file__).parent / "watchlist.json"
 
+HOMOGLYPH_MAP = {
+    "а": "a",  # Cyrillic small a
+    "е": "e",  # Cyrillic small ie
+    "о": "o",  # Cyrillic small o
+    "р": "p",  # Cyrillic small er
+    "с": "c",  # Cyrillic small es
+    "х": "x",  # Cyrillic small ha
+    "у": "y",  # Cyrillic small u
+}
+
 
 def load_watchlist():
     """Load legitimate domains from watchlist.json."""
@@ -83,6 +93,11 @@ def normalize_domain(domain):
     return domain
 
 
+def normalize_homoglyphs(domain):
+    """Replace supported lookalike characters with their Latin equivalents."""
+    return "".join(HOMOGLYPH_MAP.get(character, character) for character in domain)
+
+
 def check_domain(domain: str) -> dict:
     """Check whether a domain looks like an impersonation of a known brand."""
 
@@ -115,6 +130,18 @@ def check_domain(domain: str) -> dict:
     )
 
     distance = levenshtein(domain, closest_match)
+
+    homoglyph_domain = normalize_homoglyphs(domain)
+    if homoglyph_domain != domain:
+        for watchlist_domain in watchlist:
+            if homoglyph_domain == watchlist_domain:
+                return {
+                    "domain": original_domain,
+                    "is_suspicious": True,
+                    "closest_match": watchlist_domain,
+                    "distance": levenshtein(domain, watchlist_domain),
+                    "match_type": "homoglyph",
+                }
 
     is_suspicious = (
         domain != closest_match

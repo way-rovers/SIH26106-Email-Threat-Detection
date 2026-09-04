@@ -18,7 +18,9 @@
   programming; it does not handle adjacent transpositions as one edit.
 - `check_domain()` compares the normalized input with every watchlist entry,
   selects the closest entry, and flags a non-exact match at distance <= 2.
-- Homoglyph detection is not implemented.
+- `check_domain()` first checks whether a supported homoglyph-normalized
+  domain exactly matches a watchlist entry, then uses ordinary matching for
+  all other inputs.
 - The function echoes the original input in the `domain` result field, but a
   non-string value can currently fail during normalization.
 - `test_typosquat.py` checks output shape, exact trusted-domain behavior,
@@ -77,8 +79,9 @@
 
 ## Decisions made
 
-- Target 1 is complete; Target 2 is the next target.
-- Target 2 is now complete; Target 3 is the next target.
+- Target 1 is complete.
+- Target 2 is complete.
+- Target 3 is now complete; Target 4 is the next target.
 - The pinned public API and return field names are frozen.
 - The detector will remain self-contained and will not add live DNS or
   external API calls.
@@ -96,14 +99,23 @@
 - The distance helper uses the standard dynamic-programming matrix with last
   matching-character positions, supporting adjacent transposition as one
   edit without adding dependencies.
+- Homoglyph handling uses a small explicit Cyrillic-to-Latin mapping for
+  common lookalikes (`а`, `е`, `о`, `р`, `с`, `х`, and `у`). It is applied only
+  when a mapped domain exactly matches a watchlist entry, limiting false
+  positives and avoiding an external dependency.
+- A supported homoglyph match takes precedence over the ordinary distance
+  result and reports the raw domain distance plus `match_type: "homoglyph"`.
+  Unsupported Unicode remains on the existing safe distance path.
 
 ## Files changed
 
 - `typosquat/main.py` — reject non-string and empty normalized inputs before
-  matching; calculate Damerau-Levenshtein distance for watchlist matching.
+  matching; calculate Damerau-Levenshtein distance and detect supported
+  homoglyph matches.
 - `typosquat/test_typosquat.py` — add parameterized exact-result tests for
-  malformed and empty inputs plus edit-operation and transposition tests.
-- `process.md` — update the execution log and mark Target 2 complete.
+  malformed and empty inputs plus edit-operation, transposition, homoglyph,
+  ASCII, and Unicode edge-case tests.
+- `process.md` — update the execution log and mark Target 3 complete.
 
 No files outside the Person 5 module and its process log were changed.
 
@@ -112,7 +124,10 @@ No files outside the Person 5 module and its process log were changed.
 - `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 16 tests.
 - `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 21 tests
   after Target 2.
+- `py -3.12 -m pytest typosquat\\test_typosquat.py -q` — passed, 26 tests
+  after Target 3.
 - `py -3.12 -m pytest -q` — passed, 44 tests.
+- `py -3.12 -m pytest -q` — passed, 49 tests after Target 3.
 - Fixture header inspection — completed; sender domains found were
   `bank-of-america.com`, `paypa1.com`, and `micros0ft-support.com`.
 - `git diff --check` — passed.
@@ -126,8 +141,9 @@ No files outside the Person 5 module and its process log were changed.
   `micros0ft-support.com` phishing fixture; brand-label comparison or a
   carefully scoped suffix policy needs to be decided in a later target.
 - No new problems were found during Target 2 validation.
+- The explicit mapping intentionally covers common Cyrillic lookalikes only;
+  broader Unicode confusable coverage is outside this target.
 
 ## Next target
 
-Target 3: implement constrained homoglyph detection and add focused
-Unicode/mixed-script tests.
+Target 4: review watchlist coverage and add shared-fixture regression cases.

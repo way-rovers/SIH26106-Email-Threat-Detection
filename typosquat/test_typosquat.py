@@ -65,6 +65,31 @@ def test_adjacent_transposition_is_detected_by_check_domain():
     assert result["match_type"] == "edit_distance"
 
 
+def test_cyrillic_homoglyph_is_detected():
+    result = check_domain("pаypal.com")
+    assert result["is_suspicious"] is True
+    assert result["closest_match"] == "paypal.com"
+    assert result["distance"] == 1
+    assert result["match_type"] == "homoglyph"
+
+
+def test_ascii_trusted_domain_keeps_existing_safe_behavior():
+    assert check_domain("paypal.com") == {
+        "domain": "paypal.com",
+        "is_suspicious": False,
+        "closest_match": None,
+        "distance": None,
+        "match_type": None,
+    }
+
+
+@pytest.mark.parametrize("domain", ["pаypal.", "\u0370aypal.com", "\x00"])
+def test_unsupported_or_malformed_homoglyph_input_does_not_raise(domain):
+    result = check_domain(domain)
+    assert set(result) == REQUIRED_KEYS
+    assert isinstance(result["is_suspicious"], bool)
+
+
 def test_exact_trusted_domain_is_safe():
     result = check_domain("paypal.com")
     assert result["is_suspicious"] is False
