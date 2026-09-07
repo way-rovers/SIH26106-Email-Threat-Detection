@@ -17,9 +17,11 @@ Return shape:
 
 Rules:
 - Never raise an exception — set error field instead.
-- Milestone 3.1: single real API call, no caching or private-IP handling yet.
+- Milestone 3.2: private/reserved IP and malformed input are short-circuited
+  before any network call.
 """
 
+import ipaddress
 import requests
 
 _API_BASE = "http://ip-api.com/json"
@@ -46,6 +48,16 @@ def geolocate_ip(ip: str) -> dict:
         "lat": None,
         "lon": None,
     }
+
+    # --- Milestone 3.2: short-circuit before touching the network ---
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return {**_error_shape, "error": "invalid IP address"}
+
+    if addr.is_private:
+        return {**_error_shape, "error": "private/reserved IP"}
+    # ----------------------------------------------------------------
 
     try:
         response = requests.get(f"{_API_BASE}/{ip}", timeout=_TIMEOUT)

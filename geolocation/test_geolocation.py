@@ -27,3 +27,26 @@ def test_geolocate_ip_echoes_input():
     ip = "8.8.8.8"
     result = geolocate_ip(ip)
     assert result["ip"] == ip, "ip field must echo back the input"
+
+
+# --- Milestone 3.2 ---
+
+def test_private_ip_short_circuits():
+    """Private IPs must be rejected before any network call."""
+    result = geolocate_ip("192.168.1.1")
+    assert result["error"] == "private/reserved IP"
+    assert result["country"] == "unknown"
+    assert result["lat"] is None
+
+
+def test_loopback_ip_short_circuits():
+    result = geolocate_ip("127.0.0.1")
+    assert result["error"] == "private/reserved IP"
+
+
+def test_malformed_ip_short_circuits():
+    """Non-IP strings must return cleanly without hitting the network."""
+    result = geolocate_ip("not-an-ip")
+    assert result["error"] == "invalid IP address"
+    assert result["ip"] == "not-an-ip"
+    assert REQUIRED_KEYS == result.keys()
