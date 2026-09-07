@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 import ipaddress
 import requests
+import folium
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +226,147 @@ def geolocate_ip(ip: str) -> dict:
             "lon": None,
             "error": f"Unexpected error: {str(exc)}",
         }
+
+
+def _hop_role(position: int, total_hops: int) -> str:
+    """Classify a hop's position in the relay chain.
+
+    Returns one of "origin", "destination", "intermediate" based on where
+    it sits in the *full* received_chain (not just the hops with valid
+    coordinates) so that "hop 0" and "the last hop" retain their meaning
+    even when some hops in between get dropped for missing coordinates.
+    """
+    if total_hops <= 1:
+        return "origin"
+    if position == 0:
+        return "origin"
+    if position == total_hops - 1:
+        return "destination"
+    return "intermediate"
+
+
+_ROLE_STYLE = {
+    "origin": {"color": "red", "icon": "flag", "label": "Origin (earliest hop)"},
+    "destination": {"color": "green", "icon": "envelope", "label": "Destination MX"},
+    "intermediate": {"color": "orange", "icon": "arrow-right", "label": "Transit relay"},
+}
+
+
+def _hop_popup_html(position: int, hop: dict, role: str) -> str:
+    """Build a small HTML popup body for a single hop marker."""
+    ip = hop.get("ip", "unknown")
+    city = hop.get("city") or "unknown"
+    country = hop.get("country") or "unknown"
+    isp = hop.get("isp") or "unknown"
+    error = hop.get("error")
+    status = "Resolved" if not error else f"Unresolved ({error})"
+    role_label = _ROLE_STYLE.get(role, {}).get("label", role)
+
+    return (
+        f"<div style='font-family: sans-serif; font-size: 13px; min-width: 180px'>"
+        f"<b>Hop #{position}</b> &mdash; {role_label}<br>"
+        f"<b>IP:</b> {ip}<br>"
+        f"<b>Location:</b> {city}, {country}<br>"
+        f"<b>ISP/ASN:</b> {isp}<br>"
+        f"<b>Status:</b> {status}"
+        f"</div>"
+    )
+
+
+def _empty_relay_map(note: str) -> "folium.Map":
+    """Return a clean neutral world map annotated with *note*.
+
+    Used when geo_hops is empty or none of the hops resolved to valid
+    coordinates, so the dashboard never breaks even on fully-private or
+    fully-failed relay chains. The note is rendered as a fixed HTML overlay
+    (not a folium.Marker) so callers counting relay-hop markers on the map
+    see zero, as expected for a chain with no plottable hops.
+    """
+    fmap = folium.Map(location=[20.0, 0.0], zoom_start=2, tiles="OpenStreetMap")
+    note_html = (
+        "<div style='position: fixed; top: 12px; left: 50%; transform: translateX(-50%); "
+        "z-index: 9999; background: white; padding: 8px 14px; border-radius: 6px; "
+        "border: 1px solid #999; font-family: sans-serif; font-size: 13px; "
+        f"color: #333; text-align: center; max-width: 80%;'>{note}</div>"
+    )
+    fmap.get_root().html.add_child(folium.Element(note_html))
+    return fmap
+
+
+def build_relay_map(geo_hops: list[dict]) -> "folium.Map":
+    """Render an interactive relay-path map from a list of geolocate_ip() outputs.
+
+    Args:
+        geo_hops: ordered list of dicts, each shaped like geolocate_ip()'s
+            return value, one per hop in the email's received_chain
+            (earliest hop first, destination MX last). Hops with
+            lat/lon == None (private/reserved/unresolved IPs) are skipped
+            for markers and path-drawing but don't break rendering.
+
+    Returns:
+        A folium.Map. Never raises — always returns a renderable map, even
+        for an empty list or a chain where every hop failed to resolve.
+    """
+    if not geo_hops:
+        return _empty_relay_map("No relay hops available for this email.")
+
+    total_hops = len(geo_hops)
+    valid_points = []   # [(lat, lon), ...] in chain order, for the path + bounds
+    any_valid = False
+
+    fmap = folium.Map(location=[20.0, 0.0], zoom_start=2, tiles="OpenStreetMap")
+
+    for position, hop in enumerate(geo_hops):
+        hop = hop or {}
+        lat = hop.get("lat")
+        lon = hop.get("lon")
+
+        if lat is None or lon is None:
+            # Private/internal/unresolved hop — no marker, no path point.
+            continue
+
+        try:
+            lat_f, lon_f = float(lat), float(lon)
+        except (TypeError, ValueError):
+            continue
+
+        any_valid = True
+        role = _hop_role(position, total_hops)
+        style = _ROLE_STYLE[role]
+
+        folium.Marker(
+            location=[lat_f, lon_f],
+            popup=folium.Popup(_hop_popup_html(position, hop, role), max_width=260),
+            tooltip=f"Hop #{position} — {hop.get('city', 'unknown')}, {hop.get('country', 'unknown')}",
+            icon=folium.Icon(color=style["color"], icon=style["icon"], prefix="fa"),
+        ).add_to(fmap)
+
+        valid_points.append((lat_f, lon_f))
+
+    if not any_valid:
+        return _empty_relay_map(
+            "None of this email's relay hops had a resolvable public IP "
+            "(private/internal addresses only, or all lookups failed)."
+        )
+
+    # Trajectory line across whichever valid hops we have, in chain order.
+    if len(valid_points) >= 2:
+        folium.PolyLine(
+            locations=valid_points,
+            color="#1f77b4",
+            weight=3,
+            opacity=0.75,
+            dash_array="8, 6",
+        ).add_to(fmap)
+
+    # Auto-fit to the hops we actually plotted.
+    if len(valid_points) == 1:
+        fmap.location = valid_points[0]
+        fmap.zoom_start = 6
+    else:
+        fmap.fit_bounds(valid_points)
+
+    return fmap
 
 
 def clear_cache() -> None:
