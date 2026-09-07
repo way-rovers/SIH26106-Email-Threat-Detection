@@ -1,15 +1,30 @@
-{
-  "watchlist": [
-    "paypal.com",
-    "microsoft.com",
-    "google.com",
-    "apple.com",
-    "amazon.com",
-    "chase.com",
-    "wellsfargo.com",
-    "bankofamerica.com",
-    "irs.gov",
-    "sbi.co.in"
-  ],
-  "notes": "Add your institution's domain here. Keep sorted alphabetically."
-}
+[
+  "amazon.com",
+  "apple.com",
+  "bankofamerica.com",
+  "bank-of-america.com",
+  "barclays.co.uk",
+  "chase.com",
+  "citibank.com",
+  "dropbox.com",
+  "facebook.com",
+  "github.com",
+  "google.com",
+  "hdfc.com",
+  "hdfcbank.com",
+  "icicibank.com",
+  "instagram.com",
+  "intuit.com",
+  "irs.gov",
+  "linkedin.com",
+  "microsoft.com",
+  "netflix.com",
+  "outlook.com",
+  "paypal.com",
+  "sbi.co.in",
+  "slack.com",
+  "twitter.com",
+  "wellsfargo.com",
+  "yahoo.com",
+  "zoom.us"
+]
