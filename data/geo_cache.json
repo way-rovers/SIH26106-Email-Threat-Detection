@@ -1,0 +1,29 @@
+{
+  "185.220.101.45": {
+    "ip": "185.220.101.45",
+    "country": "Germany",
+    "city": "Brandenburg an der Havel",
+    "isp": "Stiftung Erneuerbare Freiheit",
+    "lat": 52.6171,
+    "lon": 13.1207,
+    "error": ""
+  },
+  "8.8.8.8": {
+    "ip": "8.8.8.8",
+    "country": "United States",
+    "city": "Ashburn",
+    "isp": "Google LLC",
+    "lat": 39.03,
+    "lon": -77.5,
+    "error": ""
+  },
+  "1.1.1.1": {
+    "ip": "1.1.1.1",
+    "country": "Australia",
+    "city": "South Brisbane",
+    "isp": "Cloudflare, Inc",
+    "lat": -27.4766,
+    "lon": 153.0166,
+    "error": ""
+  }
+}
