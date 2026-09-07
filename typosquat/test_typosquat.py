@@ -4,10 +4,16 @@ Milestone 2.1 tests: shape contract (all still pass).
 Milestone 2.2 tests: edit-distance matching behaviour.
 Milestone 2.3 tests: homoglyph detection behaviour.
 Milestone 2.4 tests: subdomain-abuse detection behaviour.
+Milestone 2.5 tests: real cross-module integration vs parse_email() fixtures.
 """
+
+import pathlib
 
 import pytest
 from typosquat.main import check_domain
+
+# Path to fixture .eml files, resolved relative to this test file.
+_FIXTURES_DIR = pathlib.Path(__file__).parent.parent / "contracts" / "fixtures"
 
 REQUIRED_KEYS = {"domain", "is_suspicious", "closest_match", "distance", "match_type"}
 
@@ -71,11 +77,18 @@ class TestEditDistance:
         assert r["match_type"] == "edit_distance"
 
     def test_distance_2_still_suspicious(self):
-        """applee.com → apple.com, distance 1 (extra 'e') — within threshold."""
-        r = check_domain("applee.com")
+        """chaes.com → chase.com, distance 2 (transposed letters) — within threshold.
+
+        Chosen specifically because 'chase' is NOT a substring of 'chaes',
+        so subdomain-abuse doesn't fire and this remains a pure edit-distance case.
+        contrast: applee.com was used here in 2.2 but after the priority reorder
+        (homoglyph > subdomain_abuse > edit_distance) it is caught as
+        subdomain_abuse first (brand 'apple' IS a substring of 'applee').
+        """
+        r = check_domain("chaes.com")
         assert r["is_suspicious"] is True
-        assert r["closest_match"] == "apple.com"
-        assert r["distance"] <= 3
+        assert r["closest_match"] == "chase.com"
+        assert r["distance"] == 2
         assert r["match_type"] == "edit_distance"
 
     # --- not suspicious: exact watchlist hits ---
@@ -315,11 +328,21 @@ class TestSubdomainAbuse:
     # ─── priority: edit_distance still beats subdomain_abuse ─────────────
 
     def test_miicrosoft_still_edit_distance_not_subdomain_abuse(self):
-        """miicrosoft.com: edit-distance=1, well within threshold.
-        Edit-distance fires first — match_type must be 'edit_distance'.
+        """miicrosoft.com: 'microsoft' is NOT a substring of 'miicrosoft' (double i
+        breaks the literal match), so subdomain-abuse doesn't fire.  Edit-distance
+        = 1 fires instead.  This is the key case showing the two checks are distinct.
         """
         r = check_domain("miicrosoft.com")
         assert r["match_type"] == "edit_distance"   # NOT subdomain_abuse
+
+    def test_applee_now_subdomain_abuse_beats_edit_distance(self):
+        """applee.com: brand 'apple' IS a substring of 'applee' (brand-embedding).
+        After the priority reorder (subdomain_abuse > edit_distance per spec),
+        subdomain_abuse fires before the edit-distance check runs.
+        """
+        r = check_domain("applee.com")
+        assert r["is_suspicious"] is True
+        assert r["match_type"] == "subdomain_abuse"  # NOT edit_distance
 
     # ─── exact watchlist domains stay clean ───────────────────────────
 
@@ -356,3 +379,80 @@ class TestSubdomainAbuse:
         r = check_domain(raw)
         assert r["domain"] == raw   # raw input, not normalised
 
+
+# ---------------------------------------------------------------------------
+# Milestone 2.5 — cross-module integration (real parse_email() output)
+# ---------------------------------------------------------------------------
+
+
+class TestIntegration:
+    """Feed real parse_email() sender_domain values directly into check_domain().
+
+    This is the first cross-module integration test for the typosquat module.
+    parse_email() is called on the actual .eml fixture files; the extracted
+    sender_domain is what check_domain() will see in production.
+    """
+
+    def test_legit_fixture_sender_domain_not_suspicious(self):
+        """sample_legit_1.eml: From support@bank-of-america.com.
+        parse_email() extracts sender_domain='bank-of-america.com'.
+        That domain IS on the watchlist — not suspicious.
+        """
+        from forensics.main import parse_email
+
+        parsed = parse_email(str(_FIXTURES_DIR / "sample_legit_1.eml"))
+        assert parsed["sender_domain"] == "bank-of-america.com", (
+            f"forensics extracted unexpected sender_domain: {parsed['sender_domain']!r}"
+        )
+        r = check_domain(parsed["sender_domain"])
+        assert r["is_suspicious"] is False
+        assert r["match_type"] is None
+
+    def test_phish1_fixture_caught_as_homoglyph(self):
+        """sample_phish_1.eml: From security@paypa1.com.
+        parse_email() extracts sender_domain='paypa1.com'.
+        '1'→'l' normalises to paypal.com — homoglyph match.
+        """
+        from forensics.main import parse_email
+
+        parsed = parse_email(str(_FIXTURES_DIR / "sample_phish_1.eml"))
+        assert parsed["sender_domain"] == "paypa1.com", (
+            f"forensics extracted unexpected sender_domain: {parsed['sender_domain']!r}"
+        )
+        r = check_domain(parsed["sender_domain"])
+        assert r["is_suspicious"] is True
+        assert r["match_type"] == "homoglyph"
+        assert r["closest_match"] == "paypal.com"
+        assert r["distance"] == 0
+
+    def test_phish2_fixture_caught_as_subdomain_abuse(self):
+        """sample_phish_2_campaign_a.eml: From no-reply@micros0ft-support.com.
+        parse_email() extracts sender_domain='micros0ft-support.com'.
+        Homoglyph misses (normalised form not on watchlist).
+        Brand 'microsoft' found in normalised string — subdomain_abuse.
+        """
+        from forensics.main import parse_email
+
+        parsed = parse_email(str(_FIXTURES_DIR / "sample_phish_2_campaign_a.eml"))
+        assert parsed["sender_domain"] == "micros0ft-support.com", (
+            f"forensics extracted unexpected sender_domain: {parsed['sender_domain']!r}"
+        )
+        r = check_domain(parsed["sender_domain"])
+        assert r["is_suspicious"] is True
+        assert r["match_type"] == "subdomain_abuse"
+        assert r["closest_match"] == "microsoft.com"
+
+    def test_phish3_fixture_caught_as_subdomain_abuse(self):
+        """sample_phish_3_campaign_a.eml: From helpdesk@micros0ft-support.com.
+        Same sender domain as phish_2 — same campaign, same detection path.
+        """
+        from forensics.main import parse_email
+
+        parsed = parse_email(str(_FIXTURES_DIR / "sample_phish_3_campaign_a.eml"))
+        assert parsed["sender_domain"] == "micros0ft-support.com", (
+            f"forensics extracted unexpected sender_domain: {parsed['sender_domain']!r}"
+        )
+        r = check_domain(parsed["sender_domain"])
+        assert r["is_suspicious"] is True
+        assert r["match_type"] == "subdomain_abuse"
+        assert r["closest_match"] == "microsoft.com"

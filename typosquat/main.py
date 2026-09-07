@@ -21,7 +21,8 @@ Milestone notes:
     2.1 — Watchlist load + shape stub only.
     2.2 — Edit-distance matching (Levenshtein).
     2.3 — Homoglyph detection.
-    2.4 — Subdomain-abuse checking. ← CURRENT
+    2.4 — Subdomain-abuse checking.
+    2.5 — Integration test vs real parse_email() output. ← CURRENT
 """
 
 import json
@@ -37,8 +38,8 @@ _WATCHLIST_PATH = pathlib.Path(__file__).parent / "watchlist.json"
 
 # Domains whose edit-distance from the input is within this threshold are
 # considered suspicious.  Chosen to catch realistic 1-3 character swaps /
-# insertions (e.g. paypa1.com → paypal.com = 1) without over-firing on
-# compound attacks like "micros0ft-support.com" (those are milestone 2.4).
+# insertions (e.g. miicrosoft.com → microsoft.com = 1).  Runs AFTER subdomain-
+# abuse so that brand-embedding attacks are classified more specifically.
 _EDIT_DISTANCE_THRESHOLD = 3
 
 
@@ -190,15 +191,16 @@ def _closest_watchlist_entry(domain: str) -> tuple[str, int] | tuple[None, None]
 def check_domain(domain: str) -> dict:
     """Check whether *domain* looks like an impersonation of a known brand.
 
-    Detection order (highest-confidence first):
+    Detection order (highest-confidence first, per solo spec):
       1. Homoglyph check    — exact watchlist match after char-substitution.
          distance=0 because the normalised form IS the watchlist entry.
-      2. Edit-distance      — within _EDIT_DISTANCE_THRESHOLD Levenshtein edits.
-      3. Subdomain abuse    — a watchlist brand token appears as a substring
+      2. Subdomain abuse    — a watchlist brand token appears as a substring
          of the (normalised) domain (e.g. "microsoft-support.com").
          distance=0; match_type="subdomain_abuse".
+      3. Edit-distance      — within _EDIT_DISTANCE_THRESHOLD Levenshtein edits.
+         Catches near-misses that are not brand-embedding attacks.
 
-    MILESTONE 2.4 — adds subdomain-abuse detection on top of 2.2/2.3.
+    MILESTONE 2.5 — priority order corrected; integration tests added.
 
     Args:
         domain: The sender domain extracted from the email headers
@@ -225,7 +227,25 @@ def check_domain(domain: str) -> dict:
                 "match_type": "homoglyph",
             }
 
-        # ── 2. Edit-distance check (milestone 2.2) ────────────────────────
+        # ── 2. Subdomain-abuse check (milestone 2.4, priority 2 per spec) ───
+        # Normalises the domain internally, then checks whether any watchlist
+        # brand token (e.g. "microsoft" from "microsoft.com") is embedded in
+        # the domain string.  Catches compound attacks like "micros0ft-support.com"
+        # and brand-in-prefix tricks like "paypal-secure.com" — both of which
+        # may also be close in edit-distance, but brand-embedding is the more
+        # specific and deliberate signal, so it ranks above edit-distance.
+        abused_entry = _check_subdomain_abuse(domain)
+        if abused_entry is not None:
+            return {
+                "domain": domain,
+                "is_suspicious": True,
+                "closest_match": abused_entry,
+                "distance": 0,              # brand token appears literally (0 transforms)
+                "match_type": "subdomain_abuse",
+            }
+
+        # ── 3. Edit-distance check (milestone 2.2, priority 3 per spec) ────
+        # Fallback for near-miss domains that don't embed a brand token.
         closest, dist = _closest_watchlist_entry(domain)
 
         if closest is not None and dist <= _EDIT_DISTANCE_THRESHOLD:
@@ -235,21 +255,6 @@ def check_domain(domain: str) -> dict:
                 "closest_match": closest,
                 "distance": dist,
                 "match_type": "edit_distance",
-            }
-
-        # ── 3. Subdomain-abuse check (milestone 2.4) ─────────────────────
-        # Normalises the domain internally, then checks whether any watchlist
-        # brand token (e.g. "microsoft" from "microsoft.com") is embedded in
-        # the domain string.  Catches compound attacks like "micros0ft-support.com"
-        # that are too far from the watchlist entry to trigger edit-distance.
-        abused_entry = _check_subdomain_abuse(domain)
-        if abused_entry is not None:
-            return {
-                "domain": domain,
-                "is_suspicious": True,
-                "closest_match": abused_entry,
-                "distance": 0,              # brand token appears literally (0 transforms)
-                "match_type": "subdomain_abuse",
             }
 
         return {
