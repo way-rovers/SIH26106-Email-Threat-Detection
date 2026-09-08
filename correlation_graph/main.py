@@ -28,6 +28,8 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
+import networkx as nx
+
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
@@ -121,6 +123,42 @@ def _write_matching_edges(
         )
 
 
+def _cluster_result(connection: sqlite3.Connection, email_id: str) -> dict:
+    """Build the persisted graph and return the cluster containing *email_id*."""
+    graph = nx.Graph()
+    edge_rows = connection.execute(
+        "SELECT email_id_a, email_id_b, reason FROM edges"
+    ).fetchall()
+    for email_id_a, email_id_b, reason in edge_rows:
+        graph.add_edge(email_id_a, email_id_b, reason=reason)
+
+    component = next(
+        (
+            connected_component
+            for connected_component in nx.connected_components(graph)
+            if email_id in connected_component
+        ),
+        None,
+    )
+    if component is None:
+        return _unclustered_result()
+
+    match_reasons = connection.execute(
+        """
+        SELECT DISTINCT reason FROM edges
+        WHERE email_id_a = ? OR email_id_b = ?
+        ORDER BY reason
+        """,
+        (email_id, email_id),
+    ).fetchall()
+    return {
+        "campaign_id": min(component),
+        "linked_emails": sorted(component - {email_id}),
+        "cluster_size": len(component),
+        "match_reason": [reason for (reason,) in match_reasons],
+    }
+
+
 def open_connection(db_path: str) -> Optional[sqlite3.Connection]:
     """Open *db_path* and initialise the correlation tables if necessary.
 
@@ -189,6 +227,7 @@ def correlate(record: dict, db_path: str = "data/campaigns.db") -> dict:
             typosquat.get("closest_match"),
         )
         connection.commit()
+        return _cluster_result(connection, record["email_id"])
     except Exception:
         return _unclustered_result()
     finally:
@@ -197,5 +236,3 @@ def correlate(record: dict, db_path: str = "data/campaigns.db") -> dict:
                 connection.close()
             except Exception:
                 pass
-
-    return _unclustered_result()
