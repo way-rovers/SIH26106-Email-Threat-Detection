@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_ac5918dd018927eae3bb56f78487e643 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-ant-path@1.1.2/dist/leaflet-ant-path.min.js"></script>
+</head>
+<body>
+    
+    
+    <div style="
+        position: fixed; bottom: 30px; left: 30px; z-index: 1000;
+        background: rgba(0,0,0,0.75); color: #fff;
+        padding: 12px 16px; border-radius: 8px;
+        font-family: sans-serif; font-size: 13px; line-height: 1.8;">
+        <b>Email Relay Path</b><br>
+        <span style="color:#e74c3c;">●</span> Origin MTA<br>
+        <span style="color:#3498db;">●</span> Intermediate hop<br>
+        <span style="color:#2ecc71;">●</span> Destination<br>
+        <span style="color:#f39c12;">— —</span> Relay direction
+    </div>
+    
+    
+            <div class="folium-map" id="map_ac5918dd018927eae3bb56f78487e643" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_ac5918dd018927eae3bb56f78487e643 = L.map(
+                "map_ac5918dd018927eae3bb56f78487e643",
+                {
+                    center: [0.0, 0.0],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 10,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_fcc6a811f10dbcf874d29bafdb79dbfb = L.tileLayer(
+                "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_312u_1_bc50a680cea598eee834bb92",
+                {
+  "minZoom": 0,
+  "maxZoom": 18,
+  "maxNativeZoom": 18,
+  "noWrap": true,
+  "attribution": "\u0026copy; CARTO",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_fcc6a811f10dbcf874d29bafdb79dbfb.addTo(map_ac5918dd018927eae3bb56f78487e643);
+        
+    
+            ant_path_30bd5297f820221587a00c165e9c33df = L.polyline.antPath(
+              [[23.0276, 72.5871], [-33.8672, 151.1997], [39.03, -77.5], [52.6171, 13.1207]],
+              {
+  "stroke": true,
+  "color": "#f39c12",
+  "weight": 3,
+  "opacity": 0.8,
+  "lineCap": "round",
+  "lineJoin": "round",
+  "dashArray": [
+10,
+20,
+],
+  "dashOffset": null,
+  "fill": false,
+  "fillColor": "#f39c12",
+  "fillOpacity": 0.2,
+  "fillRule": "evenodd",
+  "bubblingMouseEvents": true,
+  "smoothFactor": 1.0,
+  "noClip": false,
+  "paused": false,
+  "reverse": false,
+  "hardwareAcceleration": false,
+  "delay": 800,
+  "pulseColor": "#ffffff",
+}
+        ).addTo(map_ac5918dd018927eae3bb56f78487e643);
+        
+    
+            var circle_marker_4a9cbf316524825c627bbc04f0b0dcda = L.circleMarker(
+                [23.0276, 72.5871],
+                {"bubblingMouseEvents": true, "color": "#e74c3c", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#e74c3c", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 10, "stroke": true, "weight": 3}
+            ).addTo(map_ac5918dd018927eae3bb56f78487e643);
+        
+    
+        var popup_b1242330d9dc3cd716976101c45d5e87 = L.popup({
+  "maxWidth": 240,
+});
+
+        
+            
+                var i_frame_0f32d7747142a14cee8173a2e8491496 = $(`<iframe src="data:text/html;charset=utf-8;base64,CiAgICAKICAgIDxkaXYgc3R5bGU9ImZvbnQtZmFtaWx5OiBzYW5zLXNlcmlmOyBtaW4td2lkdGg6IDE4MHB4OyI+CiAgICAgICAgPGIgc3R5bGU9ImNvbG9yOiNlNzRjM2M7Ij4jMSDigJQgT3JpZ2luPC9iPjxicj4KICAgICAgICA8aHIgc3R5bGU9Im1hcmdpbjogNHB4IDA7Ij4KICAgICAgICA8Yj5JUDo8L2I+IDIwMy44OC4xMzkuMTE1PGJyPgogICAgICAgIDxiPkNvdW50cnk6PC9iPiBJbmRpYTxicj4KICAgICAgICA8Yj5DaXR5OjwvYj4gQWhtZWRhYmFkPGJyPgogICAgICAgIDxiPklTUDo8L2I+IFlPVSBCcm9hZGJhbmQgJiBDYWJsZSBJbmRpYSBMdGQuPGJyPgogICAgICAgIDxzbWFsbCBzdHlsZT0iY29sb3I6Izg4ODsiPmxhdCAyMy4wMjc2LCBsb24gNzIuNTg3MTwvc21hbGw+CiAgICA8L2Rpdj4KICAgIA==" width="220" style="border:none !important;" height="130"></iframe>`)[0];
+                popup_b1242330d9dc3cd716976101c45d5e87.setContent(i_frame_0f32d7747142a14cee8173a2e8491496);
+            
+        
+
+        circle_marker_4a9cbf316524825c627bbc04f0b0dcda.bindPopup(popup_b1242330d9dc3cd716976101c45d5e87)
+        ;
+
+        
+    
+    
+            circle_marker_4a9cbf316524825c627bbc04f0b0dcda.bindTooltip(
+                `<div>
+                     #1 Ahmedabad, India
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_fc6861a9cc6872f44cbf9a0220e8b97c = L.circleMarker(
+                [-33.8672, 151.1997],
+                {"bubblingMouseEvents": true, "color": "#3498db", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#3498db", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 8, "stroke": true, "weight": 3}
+            ).addTo(map_ac5918dd018927eae3bb56f78487e643);
+        
+    
+        var popup_0ade4cf351763fce91490e2b64265847 = L.popup({
+  "maxWidth": 240,
+});
+
+        
+            
+                var i_frame_9753debe094da2e2a23429c832ddc52f = $(`<iframe src="data:text/html;charset=utf-8;base64,CiAgICAKICAgIDxkaXYgc3R5bGU9ImZvbnQtZmFtaWx5OiBzYW5zLXNlcmlmOyBtaW4td2lkdGg6IDE4MHB4OyI+CiAgICAgICAgPGIgc3R5bGU9ImNvbG9yOiMzNDk4ZGI7Ij4jMiDigJQgSW50ZXJtZWRpYXRlPC9iPjxicj4KICAgICAgICA8aHIgc3R5bGU9Im1hcmdpbjogNHB4IDA7Ij4KICAgICAgICA8Yj5JUDo8L2I+IDEwMy44Ni45Ni4xMDA8YnI+CiAgICAgICAgPGI+Q291bnRyeTo8L2I+IEF1c3RyYWxpYTxicj4KICAgICAgICA8Yj5DaXR5OjwvYj4gU3lkbmV5PGJyPgogICAgICAgIDxiPklTUDo8L2I+IFBhY2tldEh1YiBTLkEuPGJyPgogICAgICAgIDxzbWFsbCBzdHlsZT0iY29sb3I6Izg4ODsiPmxhdCAtMzMuODY3MiwgbG9uIDE1MS4xOTk3PC9zbWFsbD4KICAgIDwvZGl2PgogICAg" width="220" style="border:none !important;" height="130"></iframe>`)[0];
+                popup_0ade4cf351763fce91490e2b64265847.setContent(i_frame_9753debe094da2e2a23429c832ddc52f);
+            
+        
+
+        circle_marker_fc6861a9cc6872f44cbf9a0220e8b97c.bindPopup(popup_0ade4cf351763fce91490e2b64265847)
+        ;
+
+        
+    
+    
+            circle_marker_fc6861a9cc6872f44cbf9a0220e8b97c.bindTooltip(
+                `<div>
+                     #2 Sydney, Australia
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_707796311c0731736045a463dcfcb3ab = L.circleMarker(
+                [39.03, -77.5],
+                {"bubblingMouseEvents": true, "color": "#3498db", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#3498db", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 8, "stroke": true, "weight": 3}
+            ).addTo(map_ac5918dd018927eae3bb56f78487e643);
+        
+    
+        var popup_2d3c7bcf9437b40296530595af08f1ac = L.popup({
+  "maxWidth": 240,
+});
+
+        
+            
+                var i_frame_2d3e1d06a97a3ab875a3433fb1b8f035 = $(`<iframe src="data:text/html;charset=utf-8;base64,CiAgICAKICAgIDxkaXYgc3R5bGU9ImZvbnQtZmFtaWx5OiBzYW5zLXNlcmlmOyBtaW4td2lkdGg6IDE4MHB4OyI+CiAgICAgICAgPGIgc3R5bGU9ImNvbG9yOiMzNDk4ZGI7Ij4jMyDigJQgSW50ZXJtZWRpYXRlPC9iPjxicj4KICAgICAgICA8aHIgc3R5bGU9Im1hcmdpbjogNHB4IDA7Ij4KICAgICAgICA8Yj5JUDo8L2I+IDguOC44Ljg8YnI+CiAgICAgICAgPGI+Q291bnRyeTo8L2I+IFVuaXRlZCBTdGF0ZXM8YnI+CiAgICAgICAgPGI+Q2l0eTo8L2I+IEFzaGJ1cm48YnI+CiAgICAgICAgPGI+SVNQOjwvYj4gR29vZ2xlIExMQzxicj4KICAgICAgICA8c21hbGwgc3R5bGU9ImNvbG9yOiM4ODg7Ij5sYXQgMzkuMDMwMCwgbG9uIC03Ny41MDAwPC9zbWFsbD4KICAgIDwvZGl2PgogICAg" width="220" style="border:none !important;" height="130"></iframe>`)[0];
+                popup_2d3c7bcf9437b40296530595af08f1ac.setContent(i_frame_2d3e1d06a97a3ab875a3433fb1b8f035);
+            
+        
+
+        circle_marker_707796311c0731736045a463dcfcb3ab.bindPopup(popup_2d3c7bcf9437b40296530595af08f1ac)
+        ;
+
+        
+    
+    
+            circle_marker_707796311c0731736045a463dcfcb3ab.bindTooltip(
+                `<div>
+                     #3 Ashburn, United States
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            var circle_marker_b7221702063762c2852c699f5ff29579 = L.circleMarker(
+                [52.6171, 13.1207],
+                {"bubblingMouseEvents": true, "color": "#2ecc71", "dashArray": null, "dashOffset": null, "fill": true, "fillColor": "#2ecc71", "fillOpacity": 0.9, "fillRule": "evenodd", "lineCap": "round", "lineJoin": "round", "opacity": 1.0, "radius": 8, "stroke": true, "weight": 3}
+            ).addTo(map_ac5918dd018927eae3bb56f78487e643);
+        
+    
+        var popup_4f903fdcea9856c12a819885342bc8cf = L.popup({
+  "maxWidth": 240,
+});
+
+        
+            
+                var i_frame_db74714577701f4a647998e336b2f40a = $(`<iframe src="data:text/html;charset=utf-8;base64,CiAgICAKICAgIDxkaXYgc3R5bGU9ImZvbnQtZmFtaWx5OiBzYW5zLXNlcmlmOyBtaW4td2lkdGg6IDE4MHB4OyI+CiAgICAgICAgPGIgc3R5bGU9ImNvbG9yOiMyZWNjNzE7Ij4jNCDigJQgRGVzdGluYXRpb248L2I+PGJyPgogICAgICAgIDxociBzdHlsZT0ibWFyZ2luOiA0cHggMDsiPgogICAgICAgIDxiPklQOjwvYj4gMTg1LjIyMC4xMDEuNDU8YnI+CiAgICAgICAgPGI+Q291bnRyeTo8L2I+IEdlcm1hbnk8YnI+CiAgICAgICAgPGI+Q2l0eTo8L2I+IEJyYW5kZW5idXJnIGFuIGRlciBIYXZlbDxicj4KICAgICAgICA8Yj5JU1A6PC9iPiBTdGlmdHVuZyBFcm5ldWVyYmFyZSBGcmVpaGVpdDxicj4KICAgICAgICA8c21hbGwgc3R5bGU9ImNvbG9yOiM4ODg7Ij5sYXQgNTIuNjE3MSwgbG9uIDEzLjEyMDc8L3NtYWxsPgogICAgPC9kaXY+CiAgICA=" width="220" style="border:none !important;" height="130"></iframe>`)[0];
+                popup_4f903fdcea9856c12a819885342bc8cf.setContent(i_frame_db74714577701f4a647998e336b2f40a);
+            
+        
+
+        circle_marker_b7221702063762c2852c699f5ff29579.bindPopup(popup_4f903fdcea9856c12a819885342bc8cf)
+        ;
+
+        
+    
+    
+            circle_marker_b7221702063762c2852c699f5ff29579.bindTooltip(
+                `<div>
+                     #4 Brandenburg an der Havel, Germany
+                 </div>`,
+                {
+  "sticky": true,
+}
+            );
+        
+    
+            map_ac5918dd018927eae3bb56f78487e643.fitBounds(
+                [[23.0276, 72.5871], [-33.8672, 151.1997], [39.03, -77.5], [52.6171, 13.1207]],
+                {}
+            );
+        
+</script>
+</html>
