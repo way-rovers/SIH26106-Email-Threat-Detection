@@ -233,8 +233,11 @@ data/*.db
 .env
 
 # Trained NLP model artefacts
-nlp_classifier/model/
 
 # OS junk
 .DS_Store
 Thumbs.db
+
+nlp_classifier/data/
+nlp_classifier/model/*
+!nlp_classifier/model/classifier.pkl
