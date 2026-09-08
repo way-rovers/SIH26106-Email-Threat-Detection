@@ -23,6 +23,7 @@ Rules:
 """
 
 import json
+import ipaddress
 import sqlite3
 from pathlib import Path
 from typing import Optional
@@ -39,6 +40,85 @@ def _unclustered_result() -> dict:
         "cluster_size": 1,
         "match_reason": [],
     }
+
+
+def _ipv4_block(ip_address: object) -> Optional[str]:
+    """Return the /24 prefix for a valid IPv4 address, else ``None``."""
+    try:
+        parsed_address = ipaddress.ip_address(ip_address)
+        if not isinstance(parsed_address, ipaddress.IPv4Address):
+            return None
+        return ".".join(str(parsed_address).split(".")[:3])
+    except (ValueError, TypeError):
+        return None
+
+
+def _insert_edges(
+    connection: sqlite3.Connection,
+    email_id: str,
+    matched_email_ids: list[str],
+    reason: str,
+) -> None:
+    """Persist one reason-specific directed edge for every matching email."""
+    connection.executemany(
+        "INSERT INTO edges (email_id_a, email_id_b, reason) VALUES (?, ?, ?)",
+        [(email_id, matched_email_id, reason) for matched_email_id in matched_email_ids],
+    )
+
+
+def _write_matching_edges(
+    connection: sqlite3.Connection,
+    email_id: str,
+    origin_ip: object,
+    impersonated_domain: object,
+) -> None:
+    """Apply the three persistence-backed correlation rules for one email."""
+    if origin_ip is not None:
+        same_origin_ip = connection.execute(
+            "SELECT email_id FROM emails WHERE origin_ip = ? AND email_id != ?",
+            (origin_ip, email_id),
+        ).fetchall()
+        _insert_edges(
+            connection,
+            email_id,
+            [matched_email_id for (matched_email_id,) in same_origin_ip],
+            "same_origin_ip",
+        )
+
+    current_ip_block = _ipv4_block(origin_ip)
+    if current_ip_block is not None:
+        possible_ip_block_matches = connection.execute(
+            "SELECT email_id, origin_ip FROM emails "
+            "WHERE email_id != ? AND origin_ip IS NOT NULL",
+            (email_id,),
+        ).fetchall()
+        _insert_edges(
+            connection,
+            email_id,
+            [
+                matched_email_id
+                for matched_email_id, matched_origin_ip in possible_ip_block_matches
+                if _ipv4_block(matched_origin_ip) == current_ip_block
+            ],
+            "same_ip_block",
+        )
+
+    if impersonated_domain is not None:
+        same_impersonated_domain = connection.execute(
+            """
+            SELECT email_id FROM emails
+            WHERE impersonated_domain = ?
+              AND impersonated_domain IS NOT NULL
+              AND email_id != ?
+            """,
+            (impersonated_domain, email_id),
+        ).fetchall()
+        _insert_edges(
+            connection,
+            email_id,
+            [matched_email_id for (matched_email_id,) in same_impersonated_domain],
+            "same_impersonated_domain",
+        )
 
 
 def open_connection(db_path: str) -> Optional[sqlite3.Connection]:
@@ -101,6 +181,12 @@ def correlate(record: dict, db_path: str = "data/campaigns.db") -> dict:
                 typosquat.get("closest_match"),
                 json.dumps(record, default=str),
             ),
+        )
+        _write_matching_edges(
+            connection,
+            record["email_id"],
+            parsed.get("origin_ip"),
+            typosquat.get("closest_match"),
         )
         connection.commit()
     except Exception:
