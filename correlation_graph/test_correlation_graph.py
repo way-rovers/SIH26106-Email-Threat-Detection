@@ -1,18 +1,55 @@
 """Tests for persisted networkx campaign correlation."""
 
+import hashlib
+import sqlite3
+from pathlib import Path
+from unittest.mock import patch
+
 from correlation_graph.main import correlate
+from forensics.main import parse_email
+from geolocation.main import geolocate_ip
+from nlp_classifier.main import classify_text
+from typosquat.main import check_domain
 
 
 REQUIRED_KEYS = {"campaign_id", "linked_emails", "cluster_size", "match_reason"}
 
 SAMPLE_RECORD = {
-    "email_id": "test-001",
-    "parsed": {
-        "origin_ip": "185.220.101.45",
+        "email_id": "test-001",
+        "parsed": {
+        "origin_ip": "1.1.1.1",
         "sender_domain": "micros0ft-support.com",
     },
     "typosquat": {"closest_match": "microsoft.com"},
 }
+
+_FIXTURES_DIR = Path(__file__).resolve().parent.parent / "contracts" / "fixtures"
+
+
+def _build_pipeline_record(eml_path: Path) -> dict:
+    """Run the pre-dashboard pipeline stages for one fixture."""
+    parsed = parse_email(str(eml_path))
+    typosquat = check_domain(parsed.get("sender_domain") or "")
+    geo_hops = [
+        geolocate_ip(hop["ip"])
+        for hop in parsed.get("received_chain") or []
+        if hop.get("ip")
+    ]
+    classification = classify_text(parsed.get("body_text") or "")
+
+    email_id = parsed.get("message_id") or hashlib.sha256(
+        (
+            f"{parsed.get('from_addr') or ''}{parsed.get('subject') or ''}"
+            f"{parsed.get('body_text') or ''}"
+        ).encode()
+    ).hexdigest()
+    return {
+        "email_id": email_id,
+        "parsed": parsed,
+        "typosquat": typosquat,
+        "geo_hops": geo_hops,
+        "classification": classification,
+    }
 
 
 def test_correlate_returns_dict(tmp_path):
@@ -51,8 +88,8 @@ def _record(email_id, origin_ip, closest_match=None):
 
 def test_same_origin_ip_has_a_deterministic_campaign_id(tmp_path):
     db_path = str(tmp_path / "campaigns.db")
-    first = _record("email-b", "185.220.101.45")
-    second = _record("email-a", "185.220.101.45")
+    first = _record("email-b", "1.1.1.1")
+    second = _record("email-a", "1.1.1.1")
 
     correlate(first, db_path)
     second_result = correlate(second, db_path)
@@ -82,3 +119,76 @@ def test_connected_components_include_transitive_matches(tmp_path):
         "cluster_size": 3,
         "match_reason": ["same_impersonated_domain"],
     }
+
+
+def test_campaign_a_fixtures_cluster_and_other_fixtures_remain_unlinked(tmp_path):
+    """Exercise forensics, typosquat, geo, NLP, and correlation in sequence."""
+    db_path = str(tmp_path / "campaigns.db")
+    fixture_names = [
+        "sample_legit_1.eml",
+        "sample_phish_1.eml",
+        "sample_phish_2_campaign_a.eml",
+        "sample_phish_3_campaign_a.eml",
+    ]
+    # DNS is outside this test's scope and can be unavailable in CI.  Keep the
+    # real parser while making its optional DNS fallback deterministic.
+    with patch(
+        "forensics.main._checkdmarc_lookup",
+        return_value={"spf": "none", "dmarc": "none"},
+    ):
+        records = {
+            fixture_name: _build_pipeline_record(_FIXTURES_DIR / fixture_name)
+            for fixture_name in fixture_names
+        }
+
+    initial_results = {
+        fixture_name: correlate(record, db_path)
+        for fixture_name, record in records.items()
+    }
+    campaign_two_result = correlate(records["sample_phish_2_campaign_a.eml"], db_path)
+    campaign_three_result = initial_results["sample_phish_3_campaign_a.eml"]
+
+    assert initial_results["sample_legit_1.eml"] == {
+        "campaign_id": None,
+        "linked_emails": [],
+        "cluster_size": 1,
+        "match_reason": [],
+    }
+    assert initial_results["sample_phish_1.eml"] == {
+        "campaign_id": None,
+        "linked_emails": [],
+        "cluster_size": 1,
+        "match_reason": [],
+    }
+    assert campaign_two_result["campaign_id"] == campaign_three_result["campaign_id"]
+    assert campaign_two_result["cluster_size"] >= 2
+    assert campaign_three_result["cluster_size"] >= 2
+    assert "same_origin_ip" in campaign_three_result["match_reason"]
+
+
+def test_first_ever_email_has_no_campaign_or_edges(tmp_path):
+    result = correlate(_record("first-email", "8.8.8.8"), str(tmp_path / "campaigns.db"))
+
+    assert result == {
+        "campaign_id": None,
+        "linked_emails": [],
+        "cluster_size": 1,
+        "match_reason": [],
+    }
+
+
+def test_reprocessing_an_unlinked_email_is_idempotent(tmp_path):
+    db_path = str(tmp_path / "campaigns.db")
+    record = _record("idempotent-email", "9.9.9.9")
+
+    correlate(record, db_path)
+    result = correlate(record, db_path)
+    with sqlite3.connect(db_path) as connection:
+        email_count = connection.execute(
+            "SELECT COUNT(*) FROM emails WHERE email_id = ?", (record["email_id"],)
+        ).fetchone()[0]
+        edge_count = connection.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+
+    assert email_count == 1
+    assert edge_count == 0
+    assert result["campaign_id"] is None

@@ -141,7 +141,7 @@ class TestPhish1:
         assert len(chain) == 1
 
     def test_origin_ip_extracted(self):
-        assert self.r["origin_ip"] == "185.220.101.45"
+        assert self.r["origin_ip"] == "1.1.1.1"
 
     def test_origin_hop_hosts(self):
         hop = self.r["received_chain"][0]

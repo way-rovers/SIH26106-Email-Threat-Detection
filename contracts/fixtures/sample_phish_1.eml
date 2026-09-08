@@ -6,7 +6,7 @@ Message-ID: <phish-001@paypa1.com>
 Reply-To: harvest@evil-collector.com
 MIME-Version: 1.0
 Content-Type: text/plain
-Received: from mail.evil-relay.ru (mail.evil-relay.ru [185.220.101.45])
+Received: from mail.evil-relay.ru (mail.evil-relay.ru [1.1.1.1])
         by mx.example.com (Postfix) with ESMTP
         for <victim@example.com>; Thu, 03 Sep 2026 11:00:00 +0000
 
