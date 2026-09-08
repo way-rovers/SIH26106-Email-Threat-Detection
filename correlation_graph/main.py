@@ -22,12 +22,23 @@ Rules:
 - schema.sql defines the tables; use it when initialising a fresh DB.
 """
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Optional
 
 
 _SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+
+
+def _unclustered_result() -> dict:
+    """Return a fresh safe result before clustering is available."""
+    return {
+        "campaign_id": None,
+        "linked_emails": [],
+        "cluster_size": 1,
+        "match_reason": [],
+    }
 
 
 def open_connection(db_path: str) -> Optional[sqlite3.Connection]:
@@ -56,9 +67,6 @@ def open_connection(db_path: str) -> Optional[sqlite3.Connection]:
 def correlate(record: dict, db_path: str = "data/campaigns.db") -> dict:
     """Correlate *record* against previously-seen emails in *db_path*.
 
-    STUB — currently returns hardcoded example data. Replace with real
-    SQLite read/write + graph clustering logic in Phase 1.
-
     Args:
         record:  The combined pipeline record assembled by dashboard/pipeline.py.
         db_path: Path to the SQLite database file.
@@ -66,10 +74,42 @@ def correlate(record: dict, db_path: str = "data/campaigns.db") -> dict:
     Returns:
         A dict with keys: campaign_id, linked_emails, cluster_size, match_reason.
     """
-    # HARDCODED STUB — replace with real DB read/write + union-find in Phase 1.
-    return {
-        "campaign_id": "CAMP-001",
-        "linked_emails": ["phish-002@micros0ft-support.com"],
-        "cluster_size": 2,
-        "match_reason": ["same_origin_ip", "same_impersonated_domain"],
-    }
+    connection = None
+    try:
+        if not isinstance(record, dict) or not record.get("email_id"):
+            return _unclustered_result()
+
+        parsed = record.get("parsed")
+        typosquat = record.get("typosquat")
+        parsed = parsed if isinstance(parsed, dict) else {}
+        typosquat = typosquat if isinstance(typosquat, dict) else {}
+
+        connection = open_connection(db_path)
+        if connection is None:
+            return _unclustered_result()
+
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO emails
+                (email_id, sender_domain, origin_ip, impersonated_domain, raw_record)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                record["email_id"],
+                parsed.get("sender_domain"),
+                parsed.get("origin_ip"),
+                typosquat.get("closest_match"),
+                json.dumps(record, default=str),
+            ),
+        )
+        connection.commit()
+    except Exception:
+        return _unclustered_result()
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:
+                pass
+
+    return _unclustered_result()
