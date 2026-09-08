@@ -12,6 +12,7 @@ Usage:  python -m nlp_classifier.train
 """
 
 import os
+import sys
 import json
 import time
 import warnings
@@ -274,6 +275,12 @@ def _make_classifier():
 # ═══════════════════════════════════════════════════════════════════
 
 def main():
+    # Ensure UTF-8 output even when stdout is redirected to a file on Windows
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     wall_start = time.time()
     sep = "=" * 64
 
@@ -398,8 +405,8 @@ def main():
     keep_char = (cv_delta >= 0.002) or (obf_delta >= 0.05)
 
     char_rationale = (
-        f"CV F1 delta: {cv_delta:+.4f} (need ≥+0.002). "
-        f"Obfuscation recall delta: {obf_delta:+.4f} (need ≥+0.05). "
+        f"CV F1 delta: {cv_delta:+.4f} (need >=+0.002). "
+        f"Obfuscation recall delta: {obf_delta:+.4f} (need >=+0.05). "
         + ("KEPT — meets threshold." if keep_char else "DROPPED — below thresholds.")
     )
     print(f"\n  Decision: {'KEEP' if keep_char else 'DROP'} char n-grams")
@@ -547,19 +554,19 @@ def main():
         },
         "test_f1":               float(test_f1),
         "optimistic_f1":         float(opt_f1),
-        "char_ngrams_kept":      keep_char,
+        "char_ngrams_kept":      bool(keep_char),
         "char_ngrams_rationale": char_rationale,
         "obfuscation_recall_word": float(obf_recall_word),
         "obfuscation_recall_combined": float(obf_recall_comb),
-        "calibrated":            calibrated,
+        "calibrated":            bool(calibrated),
         "calibration_rationale": cal_rationale,
         "inference_latency_ms":  float(full_ms),
-        "leakage_detected":      overlap_groups > 0,
+        "leakage_detected":      bool(overlap_groups > 0),
         "near_dup_stats":        dup_stats,
         "trained_at":            datetime.now(timezone.utc).isoformat(),
     }
-    with open(THRESHOLD_META_PATH, "w") as f:
-        json.dump(meta, f, indent=2)
+    with open(THRESHOLD_META_PATH, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
     print(f"  Saved metadata → {THRESHOLD_META_PATH}")
 
     # ── Summary ───────────────────────────────────────────────────

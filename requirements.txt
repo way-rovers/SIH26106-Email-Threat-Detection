@@ -11,3 +11,4 @@ folium
 streamlit-folium
 pytest
 python-dotenv
+datasketch          # training-only: near-duplicate LSH in nlp_classifier/train.py
