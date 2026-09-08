@@ -137,3 +137,88 @@ def test_geolocate_batch_no_network_for_all_private(reset_cache):
     """Batch of only private/malformed IPs must not hit the network at all."""
     with patch("geolocation.main.requests.post") as mock_post:
         results = geolocate_batch(["10.0.0.1", "172.16.0.1", "bad"])
+
+    mock_post.assert_not_called()
+    assert all(r["error"] != "" for r in results)
+
+
+# ---------------------------------------------------------------------------
+# Milestone 3.5 — Real cross-module integration against forensics fixtures
+# ---------------------------------------------------------------------------
+
+import pathlib
+import time
+
+from forensics.main import parse_email
+
+_FIXTURES_DIR = pathlib.Path(__file__).resolve().parent.parent / "contracts" / "fixtures"
+_FIXTURES = sorted(_FIXTURES_DIR.glob("*.eml"))
+
+
+@pytest.mark.parametrize("eml_path", _FIXTURES, ids=[f.name for f in _FIXTURES])
+def test_integration_fixture_hop_shape(eml_path):
+    """Every geolocate_ip() result for a real fixture hop has the correct shape."""
+    parsed = parse_email(str(eml_path))
+    chain  = parsed.get("received_chain", [])
+
+    # Fixtures with no Received headers are valid — nothing to geolocate.
+    routable_hops = [h for h in chain if h.get("ip")]
+
+    for hop in routable_hops:
+        ip     = hop["ip"]
+        result = geolocate_ip(ip)
+
+        assert isinstance(result, dict), \
+            f"geolocate_ip({ip!r}) must return a dict"
+        missing = REQUIRED_KEYS - result.keys()
+        assert not missing, \
+            f"geolocate_ip({ip!r}) missing keys: {missing}"
+        assert result["ip"] == ip, \
+            f"ip field mismatch: expected {ip!r}, got {result['ip']!r}"
+
+        if result["error"] == "":
+            assert isinstance(result["lat"], (int, float)), \
+                f"lat not numeric for {ip!r}"
+            assert isinstance(result["lon"], (int, float)), \
+                f"lon not numeric for {ip!r}"
+
+
+def test_integration_batch_all_fixtures_fast():
+    """Batch lookup across all fixtures is cache-fast and correctly shaped.
+
+    Collects every unique public IP from every fixture, calls geolocate_batch
+    once, and asserts all results have the required contract shape and that
+    the full round-trip completes in under 5 seconds (cache hit or single
+    batch POST — never multiple sequential single requests).
+    """
+    seen: set[str] = set()
+    ip_list: list[str] = []
+    for eml_path in _FIXTURES:
+        parsed = parse_email(str(eml_path))
+        for hop in parsed.get("received_chain", []):
+            ip = hop.get("ip", "")
+            if ip and ip not in seen:
+                seen.add(ip)
+                ip_list.append(ip)
+
+    if not ip_list:
+        pytest.skip("No routable IPs found in any fixture.")
+
+    t0      = time.monotonic()
+    results = geolocate_batch(ip_list)
+    elapsed = time.monotonic() - t0
+
+    assert len(results) == len(ip_list), \
+        "geolocate_batch must return one result per input IP"
+
+    for ip, result in zip(ip_list, results):
+        missing = REQUIRED_KEYS - result.keys()
+        assert not missing, \
+            f"geolocate_batch result for {ip!r} missing keys: {missing}"
+
+    # Cached lookups should be milliseconds; a live batch POST < 2 s.
+    # 5 s is a generous ceiling that catches the pathological case of
+    # sequential single requests firing for every hop.
+    assert elapsed < 5.0, (
+        f"Batch lookup took {elapsed:.2f}s — expected cache hit or single POST."
+    )
