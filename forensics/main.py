@@ -78,20 +78,38 @@ def _extract_body(msg) -> str:
         if part.get_content_maintype() == "multipart":
             continue
         if ct == "text/plain" and plain is None:
-            try:
-                plain = part.get_content()
-            except Exception:  # noqa: BLE001
-                plain = ""
+            plain = _part_text_content(part)
         elif ct == "text/html" and html is None:
-            try:
-                html = part.get_content()
-            except Exception:  # noqa: BLE001
-                html = ""
+            html = _part_text_content(part)
     if plain is not None:
         return plain.strip()
     if html is not None:
         return _strip_html(html)
     return ""
+
+
+def _part_text_content(part) -> str:
+    """Return text content, recovering charset-less UTF-8 when needed."""
+    try:
+        content = part.get_content()
+    except Exception:  # noqa: BLE001
+        content = None
+
+    if part.get_content_charset() is not None:
+        return content or ""
+    if content is not None and "\ufffd" not in content:
+        return content
+
+    payload = part.get_payload(decode=True)
+    if not isinstance(payload, bytes):
+        return content or ""
+    try:
+        return payload.decode("utf-8", errors="replace")
+    except UnicodeDecodeError:
+        try:
+            return payload.decode("latin-1")
+        except UnicodeDecodeError:
+            return content or ""
 
 
 def _sender_domain(from_addr: str) -> str:

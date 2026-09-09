@@ -357,3 +357,36 @@ class TestEdgeCases:
         r = parse_email(str(p))
         assert "Plain text part" in r["body_text"]
         assert "HTML part" not in r["body_text"]
+
+    def test_charsetless_utf8_body_does_not_use_replacement_characters(self, tmp_path):
+        p = tmp_path / "charsetless-utf8.eml"
+        p.write_bytes(
+            b"From: s@example.com\r\n"
+            b"To: r@example.com\r\n"
+            b"Subject: Charsetless UTF-8\r\n"
+            b"Message-ID: <charsetless@example.com>\r\n"
+            b"Content-Type: text/plain\r\n"
+            b"\r\n"
+            b"A message with an em dash: \xe2\x80\x94.\r\n"
+        )
+
+        r = parse_email(str(p))
+
+        assert "—" in r["body_text"]
+        assert "\ufffd" not in r["body_text"]
+
+    def test_declared_latin1_body_still_decodes_correctly(self, tmp_path):
+        p = tmp_path / "declared-latin1.eml"
+        p.write_bytes(
+            b"From: s@example.com\r\n"
+            b"To: r@example.com\r\n"
+            b"Subject: Declared Latin-1\r\n"
+            b"Message-ID: <latin1@example.com>\r\n"
+            b"Content-Type: text/plain; charset=iso-8859-1\r\n"
+            b"\r\n"
+            b"caf\xe9\r\n"
+        )
+
+        r = parse_email(str(p))
+
+        assert r["body_text"] == "café"
