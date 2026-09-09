@@ -2,10 +2,13 @@
 
 import hashlib
 import html
+import math
 import os
 import tempfile
 
+import folium
 import streamlit as st
+from streamlit_folium import st_folium
 
 from dashboard.pipeline import run_pipeline
 from dashboard.scoring import compute_fraud_score
@@ -183,7 +186,89 @@ with headers_tab:
             st.success("No anomalies detected.")
 
 with domain_geo_tab:
-    st.info("Coming soon")
+    domain_record = _mapping(st.session_state.get("pipeline_result"))
+    domain_parsed = _mapping(domain_record.get("parsed"))
+    if not domain_record or analysis_error:
+        st.info("Upload a .eml file above to inspect domain and relay-location signals.")
+    else:
+        st.subheader("Typosquat analysis")
+        typosquat = _mapping(domain_record.get("typosquat"))
+        is_suspicious = typosquat.get("is_suspicious") is True
+        badge_color, badge_text = (
+            ("#b91c1c", "SUSPICIOUS DOMAIN") if is_suspicious else ("#15803d", "CLEAN DOMAIN")
+        )
+        st.markdown(
+            f"<span style='background:{badge_color}; color:white; padding:0.4rem 0.7rem; "
+            f"border-radius:0.35rem; font-weight:700;'>{badge_text}</span>",
+            unsafe_allow_html=True,
+        )
+
+        closest_match = typosquat.get("closest_match")
+        distance = typosquat.get("distance")
+        match_type = typosquat.get("match_type")
+        match_type_labels = {
+            "homoglyph": "Homoglyph lookalike (visually similar characters)",
+            "subdomain_abuse": "Subdomain abuse (a trusted name embedded in another domain)",
+            "edit_distance": "Edit-distance lookalike (small spelling variation)",
+        }
+        match_columns = st.columns(3)
+        match_columns[0].metric("Closest watchlist match", closest_match or "None")
+        match_columns[1].metric("Edit distance", distance if distance is not None else "N/A")
+        match_columns[2].metric("Match type", match_type_labels.get(match_type, "No suspicious match type"))
+        if not is_suspicious and closest_match:
+            st.info("A nearest watchlist domain is shown for context only; this sender was not flagged as suspicious.")
+
+        st.subheader("Relay path map")
+        received_chain = domain_parsed.get("received_chain")
+        plottable_hops = []
+        if isinstance(received_chain, list):
+            for chain_position, hop in enumerate(received_chain):
+                hop_data = _mapping(hop)
+                geo_data = _mapping(hop_data.get("geo"))
+                lat = geo_data.get("lat")
+                lon = geo_data.get("lon")
+                has_coordinates = (
+                    geo_data.get("error") == ""
+                    and isinstance(lat, (int, float)) and not isinstance(lat, bool)
+                    and isinstance(lon, (int, float)) and not isinstance(lon, bool)
+                    and math.isfinite(lat) and math.isfinite(lon)
+                )
+                if has_coordinates:
+                    plottable_hops.append({
+                        "order": chain_position,
+                        "hop_index": hop_data.get("hop_index", chain_position),
+                        "ip": hop_data.get("ip") or "Unknown IP",
+                        "country": geo_data.get("country") or "unknown",
+                        "city": geo_data.get("city") or "unknown",
+                        "lat": lat,
+                        "lon": lon,
+                    })
+
+        if not plottable_hops:
+            st.info("No relay hops have valid geolocation coordinates to plot.")
+        else:
+            center_lat = sum(hop.get("lat", 0.0) for hop in plottable_hops) / len(plottable_hops)
+            center_lon = sum(hop.get("lon", 0.0) for hop in plottable_hops) / len(plottable_hops)
+            relay_map = folium.Map(location=[center_lat, center_lon], zoom_start=2, control_scale=True)
+            for hop in plottable_hops:
+                popup = (
+                    f"Hop {html.escape(str(hop.get('hop_index')))}<br>"
+                    f"IP: {html.escape(str(hop.get('ip')))}<br>"
+                    f"Location: {html.escape(str(hop.get('city')))}, {html.escape(str(hop.get('country')))}"
+                )
+                folium.Marker(
+                    location=[hop.get("lat"), hop.get("lon")],
+                    popup=folium.Popup(popup, max_width=280),
+                    tooltip=f"Hop {hop.get('hop_index')}: {hop.get('ip')}",
+                ).add_to(relay_map)
+            if len(plottable_hops) >= 2:
+                folium.PolyLine(
+                    [(hop.get("lat"), hop.get("lon")) for hop in plottable_hops],
+                    color="#2563eb",
+                    weight=3,
+                    opacity=0.75,
+                ).add_to(relay_map)
+            st_folium(relay_map, use_container_width=True, height=440, key="relay_path_map")
 
 with content_tab:
     st.info("Coming soon")
