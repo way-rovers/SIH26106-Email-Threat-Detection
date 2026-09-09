@@ -61,10 +61,13 @@ def _insert_edges(
     matched_email_ids: list[str],
     reason: str,
 ) -> None:
-    """Persist one reason-specific directed edge for every matching email."""
+    """Persist one reason-specific edge for every matching email."""
     connection.executemany(
-        "INSERT INTO edges (email_id_a, email_id_b, reason) VALUES (?, ?, ?)",
-        [(email_id, matched_email_id, reason) for matched_email_id in matched_email_ids],
+        "INSERT OR IGNORE INTO edges (email_id_a, email_id_b, reason) VALUES (?, ?, ?)",
+        [
+            (*sorted((email_id, matched_email_id)), reason)
+            for matched_email_id in matched_email_ids
+        ],
     )
 
 

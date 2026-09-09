@@ -12,3 +12,6 @@ CREATE TABLE IF NOT EXISTS emails (
 CREATE TABLE IF NOT EXISTS edges (
     email_id_a TEXT, email_id_b TEXT, reason TEXT
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_pair_reason
+ON edges (email_id_a, email_id_b, reason);

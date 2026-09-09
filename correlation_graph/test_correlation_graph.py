@@ -192,3 +192,22 @@ def test_reprocessing_an_unlinked_email_is_idempotent(tmp_path):
     assert email_count == 1
     assert edge_count == 0
     assert result["campaign_id"] is None
+
+
+def test_reprocessing_linked_emails_does_not_duplicate_edges(tmp_path):
+    db_path = str(tmp_path / "campaigns.db")
+    first = _record("email-b", "1.1.1.1")
+    second = _record("email-a", "1.1.1.1")
+
+    correlate(first, db_path)
+    initial_result = correlate(second, db_path)
+    correlate(first, db_path)
+    repeated_result = correlate(second, db_path)
+    with sqlite3.connect(db_path) as connection:
+        edge_count = connection.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+
+    assert edge_count == 2
+    assert initial_result["campaign_id"] == "email-a"
+    assert repeated_result["campaign_id"] == initial_result["campaign_id"]
+    assert initial_result["cluster_size"] == 2
+    assert repeated_result["cluster_size"] == initial_result["cluster_size"]
