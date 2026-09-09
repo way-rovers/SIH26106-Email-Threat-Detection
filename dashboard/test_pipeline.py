@@ -1,47 +1,39 @@
-"""dashboard/test_pipeline.py — shape-check tests for run_pipeline()."""
+"""Current-contract shape tests for ``dashboard.pipeline.run_pipeline``."""
 
-import pytest
 from dashboard.pipeline import run_pipeline
+
 
 EML_PATH = "contracts/fixtures/sample_phish_1.eml"
 
-REQUIRED_KEYS = {
-    "email_id",
-    "parsed",
-    "typosquat",
-    "geo_hops",
-    "classification",
-    "correlation",
-    "fraud_score",
-    "verdict",
-}
-
-VALID_VERDICTS = {"malicious", "suspicious", "safe"}
+REQUIRED_KEYS = {"email_id", "parsed", "typosquat", "nlp", "correlation"}
 
 
-def test_run_pipeline_returns_dict():
+def test_run_pipeline_returns_current_module_record_shape():
     result = run_pipeline(EML_PATH)
-    assert isinstance(result, dict), "run_pipeline() must return a dict"
+
+    assert isinstance(result, dict)
+    assert REQUIRED_KEYS <= result.keys()
+    assert "geo_hops" not in result
+    assert "classification" not in result
+    assert "fraud_score" not in result
+    assert "verdict" not in result
 
 
-def test_run_pipeline_has_required_keys():
+def test_forensics_auth_evidence_is_preserved():
     result = run_pipeline(EML_PATH)
-    missing = REQUIRED_KEYS - result.keys()
-    assert not missing, f"run_pipeline() is missing keys: {missing}"
+    parsed = result["parsed"]
+
+    assert isinstance(parsed, dict)
+    assert isinstance(parsed.get("auth_evidence"), dict)
+    assert isinstance(parsed.get("auth_evidence", {}).get("message_level"), dict)
+    assert isinstance(parsed.get("auth_evidence", {}).get("domain_dns_posture"), dict)
 
 
-def test_run_pipeline_verdict_is_valid():
+def test_every_received_hop_carries_its_geo_result():
     result = run_pipeline(EML_PATH)
-    assert result["verdict"] in VALID_VERDICTS, \
-        f"verdict must be one of {VALID_VERDICTS}, got {result['verdict']!r}"
+    received_chain = result["parsed"].get("received_chain", [])
 
-
-def test_run_pipeline_fraud_score_in_range():
-    result = run_pipeline(EML_PATH)
-    assert 0.0 <= result["fraud_score"] <= 100.0, \
-        "fraud_score must be in [0.0, 100.0]"
-
-
-def test_run_pipeline_geo_hops_is_list():
-    result = run_pipeline(EML_PATH)
-    assert isinstance(result["geo_hops"], list), "geo_hops must be a list"
+    assert isinstance(received_chain, list)
+    for hop in received_chain:
+        assert isinstance(hop, dict)
+        assert isinstance(hop.get("geo"), dict)
