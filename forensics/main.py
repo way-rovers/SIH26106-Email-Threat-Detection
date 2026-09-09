@@ -14,6 +14,11 @@ Return shape:
     "spf_result":       "pass" | "fail" | "softfail" | "none",
     "dkim_result":      "pass" | "fail" | "none",
     "dmarc_result":     "pass" | "fail" | "none",
+    "auth_evidence":     {
+        "message_level": {...},
+        "domain_dns_posture": {...},
+        "legacy_result_sources": {...},
+    },
     "sender_anomalies": [str],        # e.g. ["from_returnpath_mismatch", "reply_to_mismatch"]
     "received_chain":   [
         {
@@ -170,9 +175,33 @@ def _checkdmarc_lookup(domain: str) -> dict:
     Returns dict with keys ``spf``, ``dmarc`` — each ``"none"`` on any
     failure (DNS timeout, domain doesn't exist, etc.).
     """
-    out = {"spf": "none", "dmarc": "none"}
+    posture = {
+        "used": True,
+        # "unavailable" means no DNS-posture signal could be obtained
+        # (timeout/resolver failure). No consumer, including scoring.py, may
+        # treat it as either a pass or a fail.
+        "spf_result": "unavailable",
+        "dmarc_result": "unavailable",
+        "reason": "lookup_error",
+    }
+    out = {"spf": "none", "dmarc": "none", "posture": posture}
     if not domain:
+        posture["used"] = False
+        posture["reason"] = "no_sender_domain"
         return out
+
+    def _posture_value(data: dict) -> tuple:
+        """Return (posture value, reason) from one checkdmarc result."""
+        if data.get("valid") is True:
+            return "valid", "none"
+        if data.get("valid") is False:
+            error = str(data.get("error", "") or "").lower()
+            if "timed out" in error or "timeout" in error:
+                return "unavailable", "dns_timeout"
+            if error and ("nameserver" in error or "resolution" in error):
+                return "unavailable", "lookup_error"
+            return "invalid", "invalid_record"
+        return "unavailable", "lookup_error"
     try:
         import checkdmarc as cd  # noqa: PLC0415
         results = cd.check_domains([domain], timeout=5)
@@ -182,6 +211,7 @@ def _checkdmarc_lookup(domain: str) -> dict:
             return out
         # --- SPF ---
         spf_data = r.get("spf") or {}
+        posture["spf_result"], spf_reason = _posture_value(spf_data)
         if spf_data.get("valid") is True:
             # Check the actual record for softfail (~all) vs hard fail (-all).
             record = spf_data.get("record", "") or ""
@@ -190,10 +220,16 @@ def _checkdmarc_lookup(domain: str) -> dict:
             out["spf"] = "fail"
         # --- DMARC ---
         dmarc_data = r.get("dmarc") or {}
+        posture["dmarc_result"], dmarc_reason = _posture_value(dmarc_data)
         if dmarc_data.get("valid") is True:
             out["dmarc"] = "pass"
         elif dmarc_data.get("valid") is False:
             out["dmarc"] = "fail"
+
+        reasons = {spf_reason, dmarc_reason} - {"none"}
+        posture["reason"] = reasons.pop() if len(reasons) == 1 else (
+            "mixed" if reasons else "none"
+        )
     except Exception:  # noqa: BLE001  — never raise
         pass
     return out
@@ -217,21 +253,56 @@ def _get_auth_results(
     """
     auth = _parse_auth_results_header(msg)
     spf, dkim, dmarc = auth["spf"], auth["dkim"], auth["dmarc"]
+    spf_source = "authentication_results" if spf != "none" else "unavailable"
+    dkim_source = "authentication_results" if dkim != "none" else "unavailable"
+    dmarc_source = "authentication_results" if dmarc != "none" else "unavailable"
+    domain_dns_posture = {
+        "used": False,
+        "spf_result": "not_checked",
+        "dmarc_result": "not_checked",
+        "reason": "not_needed",
+    }
 
     # Path 2: live DKIM only when the signature header is present and
     # path 1 didn't already give us a definitive answer.
     if dkim == "none" and msg.get("DKIM-Signature"):
         dkim = _live_dkim_verify(raw_bytes)
+        dkim_source = "live_dkim_verify"
 
     # Path 3: DNS lookup to fill any remaining "none" values.
     if spf == "none" or dmarc == "none":
         dns = _checkdmarc_lookup(sender_domain)
+        domain_dns_posture = dns["posture"]
         if spf == "none":
             spf = dns["spf"]
+            spf_source = "domain_dns_posture"
         if dmarc == "none":
             dmarc = dns["dmarc"]
+            dmarc_source = "domain_dns_posture"
 
-    return spf, dkim, dmarc
+    # New consumers, including the future dashboard/scoring.py, must use
+    # auth_evidence rather than the legacy fields below. The legacy fields
+    # preserve the established contract but conflate message auth, DNS
+    # posture, and DNS lookup failures.
+    auth_evidence = {
+        "message_level": {
+            "spf_result": auth["spf"],
+            "dkim_result": dkim,
+            "dmarc_result": auth["dmarc"],
+            "sources": {
+                "spf": "authentication_results" if auth["spf"] != "none" else "unavailable",
+                "dkim": dkim_source,
+                "dmarc": "authentication_results" if auth["dmarc"] != "none" else "unavailable",
+            },
+        },
+        "domain_dns_posture": domain_dns_posture,
+        "legacy_result_sources": {
+            "spf_result": spf_source,
+            "dkim_result": dkim_source,
+            "dmarc_result": dmarc_source,
+        },
+    }
+    return spf, dkim, dmarc, auth_evidence
 
 
 # ---------------------------------------------------------------------------
@@ -437,6 +508,29 @@ def parse_email(eml_path: str) -> dict:
             "spf_result": "none",
             "dkim_result": "none",
             "dmarc_result": "none",
+            "auth_evidence": {
+                "message_level": {
+                    "spf_result": "none",
+                    "dkim_result": "none",
+                    "dmarc_result": "none",
+                    "sources": {
+                        "spf": "unavailable",
+                        "dkim": "unavailable",
+                        "dmarc": "unavailable",
+                    },
+                },
+                "domain_dns_posture": {
+                    "used": False,
+                    "spf_result": "not_checked",
+                    "dmarc_result": "not_checked",
+                    "reason": "message_unreadable",
+                },
+                "legacy_result_sources": {
+                    "spf_result": "unavailable",
+                    "dkim_result": "unavailable",
+                    "dmarc_result": "unavailable",
+                },
+            },
             "sender_anomalies": [],
             "received_chain": [],
             "origin_ip": "",
@@ -456,7 +550,7 @@ def parse_email(eml_path: str) -> dict:
     # ------------------------------------------------------------------
     # Milestone 1.2 — SPF/DKIM/DMARC dual-path verification
     # ------------------------------------------------------------------
-    spf_result, dkim_result, dmarc_result = _get_auth_results(
+    spf_result, dkim_result, dmarc_result, auth_evidence = _get_auth_results(
         msg, raw_bytes, sender_domain
     )
 
@@ -479,6 +573,7 @@ def parse_email(eml_path: str) -> dict:
         "spf_result":       spf_result,
         "dkim_result":      dkim_result,
         "dmarc_result":     dmarc_result,
+        "auth_evidence":    auth_evidence,
         "sender_anomalies": sender_anomalies,
         "received_chain":   received_chain,
         "origin_ip":        origin_ip,

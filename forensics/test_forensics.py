@@ -9,8 +9,16 @@ pytest's tmp_path fixture — no external network calls needed.
 """
 
 import textwrap
+from functools import lru_cache
+
 import pytest
-from forensics.main import parse_email
+from forensics.main import parse_email as _parse_email
+
+
+@lru_cache(maxsize=None)
+def parse_email(eml_path: str) -> dict:
+    """Avoid repeating slow live DNS fallback calls for identical fixtures."""
+    return _parse_email(eml_path)
 
 # ---------------------------------------------------------------------------
 # Fixture paths (relative to repo root — run pytest from there)
@@ -24,6 +32,7 @@ PHISH3  = "contracts/fixtures/sample_phish_3_campaign_a.eml"
 REQUIRED_KEYS = {
     "message_id", "subject", "from_addr", "sender_domain",
     "body_text", "spf_result", "dkim_result", "dmarc_result",
+    "auth_evidence",
     "sender_anomalies", "received_chain", "origin_ip",
 }
 
@@ -53,6 +62,34 @@ def test_auth_result_values_in_contract_vocabulary(path):
     assert r["spf_result"]   in VALID_SPF,  f"spf_result out of vocabulary: {r['spf_result']}"
     assert r["dkim_result"]  in VALID_AUTH, f"dkim_result out of vocabulary: {r['dkim_result']}"
     assert r["dmarc_result"] in VALID_AUTH, f"dmarc_result out of vocabulary: {r['dmarc_result']}"
+
+
+@pytest.mark.parametrize("path", [LEGIT, PHISH1, PHISH2, PHISH3])
+def test_fixture_auth_evidence_separates_message_auth_from_dns_timeout(path):
+    """Archived fixtures lack auth headers; fallback must be labelled clearly."""
+    evidence = parse_email(path)["auth_evidence"]
+
+    assert evidence["message_level"] == {
+        "spf_result": "none",
+        "dkim_result": "none",
+        "dmarc_result": "none",
+        "sources": {
+            "spf": "unavailable",
+            "dkim": "unavailable",
+            "dmarc": "unavailable",
+        },
+    }
+    assert evidence["domain_dns_posture"] == {
+        "used": True,
+        "spf_result": "unavailable",
+        "dmarc_result": "unavailable",
+        "reason": "dns_timeout",
+    }
+    assert evidence["legacy_result_sources"] == {
+        "spf_result": "domain_dns_posture",
+        "dkim_result": "unavailable",
+        "dmarc_result": "domain_dns_posture",
+    }
 
 
 @pytest.mark.parametrize("path", [LEGIT, PHISH1, PHISH2, PHISH3])
