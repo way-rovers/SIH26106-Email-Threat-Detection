@@ -10,6 +10,7 @@ pytest's tmp_path fixture — no external network calls needed.
 
 import textwrap
 from functools import lru_cache
+from unittest.mock import patch
 
 import pytest
 from forensics.main import parse_email as _parse_email
@@ -67,7 +68,20 @@ def test_auth_result_values_in_contract_vocabulary(path):
 @pytest.mark.parametrize("path", [LEGIT, PHISH1, PHISH2, PHISH3])
 def test_fixture_auth_evidence_separates_message_auth_from_dns_timeout(path):
     """Archived fixtures lack auth headers; fallback must be labelled clearly."""
-    evidence = parse_email(path)["auth_evidence"]
+    with patch(
+        "forensics.main._checkdmarc_lookup",
+        return_value={
+            "spf": "none",
+            "dmarc": "none",
+            "posture": {
+                "used": True,
+                "spf_result": "unavailable",
+                "dmarc_result": "unavailable",
+                "reason": "dns_timeout",
+            },
+        },
+    ):
+        evidence = _parse_email(path)["auth_evidence"]
 
     assert evidence["message_level"] == {
         "spf_result": "none",

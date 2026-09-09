@@ -272,7 +272,12 @@ def _get_auth_results(
     # Path 3: DNS lookup to fill any remaining "none" values.
     if spf == "none" or dmarc == "none":
         dns = _checkdmarc_lookup(sender_domain)
-        domain_dns_posture = dns["posture"]
+        domain_dns_posture = dns.get("posture", {
+            "used": False,
+            "spf_result": "not_checked",
+            "dmarc_result": "not_checked",
+            "reason": "not_needed",
+        })
         if spf == "none":
             spf = dns["spf"]
             spf_source = "domain_dns_posture"

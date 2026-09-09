@@ -134,7 +134,16 @@ def test_campaign_a_fixtures_cluster_and_other_fixtures_remain_unlinked(tmp_path
     # real parser while making its optional DNS fallback deterministic.
     with patch(
         "forensics.main._checkdmarc_lookup",
-        return_value={"spf": "none", "dmarc": "none"},
+        return_value={
+            "spf": "none",
+            "dmarc": "none",
+            "posture": {
+                "used": True,
+                "spf_result": "unavailable",
+                "dmarc_result": "unavailable",
+                "reason": "lookup_error",
+            },
+        },
     ):
         records = {
             fixture_name: _build_pipeline_record(_FIXTURES_DIR / fixture_name)
