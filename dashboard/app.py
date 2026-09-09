@@ -7,12 +7,15 @@ import math
 import os
 from pathlib import Path
 import re
+import sqlite3
 import tempfile
 
 import folium
+import networkx as nx
 import streamlit as st
 from dotenv import load_dotenv
 from folium.plugins import AntPath
+from pyvis.network import Network
 from streamlit_folium import st_folium
 
 from dashboard.pipeline import run_pipeline
@@ -380,7 +383,15 @@ with campaign_tab:
     else:
         correlation = _mapping(campaign_record.get("correlation"))
         campaign_id = correlation.get("campaign_id")
-        if campaign_id is None:
+        linked_emails_value = correlation.get("linked_emails")
+        linked_emails = linked_emails_value if isinstance(linked_emails_value, list) else []
+        cluster_size = correlation.get("cluster_size")
+        try:
+            is_single_email_cluster = int(cluster_size) == 1 and not linked_emails
+        except (TypeError, ValueError):
+            is_single_email_cluster = False
+
+        if campaign_id is None or is_single_email_cluster:
             st.info(
                 "No campaign link found — this email was not clustered with any previously processed email."
             )
@@ -388,7 +399,7 @@ with campaign_tab:
             st.subheader("Campaign cluster")
             campaign_column, size_column = st.columns(2)
             campaign_column.metric("Campaign ID", str(campaign_id))
-            size_column.metric("Cluster size", correlation.get("cluster_size") or "Unavailable")
+            size_column.metric("Cluster size", cluster_size or "Unavailable")
             st.caption(
                 "Campaign clustering describes shared infrastructure or impersonation signals; "
                 "it does not determine this email's verdict."
@@ -410,11 +421,88 @@ with campaign_tab:
                 + (", ".join(displayed_reasons) if displayed_reasons else "No reason recorded")
             )
 
-            st.subheader("Linked emails")
-            linked_emails_value = correlation.get("linked_emails")
-            linked_emails = linked_emails_value if isinstance(linked_emails_value, list) else []
-            linked_rows = [{"email_id": str(email_id)} for email_id in linked_emails]
-            if linked_rows:
-                st.dataframe(linked_rows, hide_index=True, use_container_width=True)
+            current_email_id = campaign_record.get("email_id")
+            cluster_email_ids = []
+            if isinstance(current_email_id, str) and current_email_id:
+                cluster_email_ids.append(current_email_id)
+            for linked_email in linked_emails:
+                if isinstance(linked_email, str) and linked_email and linked_email not in cluster_email_ids:
+                    cluster_email_ids.append(linked_email)
+
+            graph = nx.Graph()
+            graph_error = None
+            if len(cluster_email_ids) >= 2:
+                try:
+                    placeholders = ", ".join("?" for _ in cluster_email_ids)
+                    edge_query = (
+                        "SELECT email_id_a, email_id_b, reason FROM edges "
+                        f"WHERE email_id_a IN ({placeholders}) OR email_id_b IN ({placeholders})"
+                    )
+                    campaigns_db = _PROJECT_ROOT / "data" / "campaigns.db"
+                    database_uri = campaigns_db.resolve().as_uri() + "?mode=ro"
+                    with sqlite3.connect(database_uri, uri=True) as connection:
+                        persisted_edges = connection.execute(
+                            edge_query, cluster_email_ids + cluster_email_ids
+                        ).fetchall()
+
+                    graph.add_nodes_from(cluster_email_ids)
+                    for email_id_a, email_id_b, edge_reason in persisted_edges:
+                        if graph.has_edge(email_id_a, email_id_b):
+                            graph[email_id_a][email_id_b].setdefault("reasons", []).append(edge_reason)
+                        else:
+                            graph.add_edge(email_id_a, email_id_b, reasons=[edge_reason])
+                except (OSError, sqlite3.Error) as error:
+                    graph_error = str(error)
+
+            if graph.number_of_edges() > 0:
+                st.subheader("Cluster graph")
+                try:
+                    network = Network(
+                        height="500px",
+                        width="100%",
+                        directed=False,
+                        bgcolor="#ffffff",
+                        font_color="#1e293b",
+                        notebook=False,
+                        cdn_resources="in_line",
+                    )
+                    for node in graph.nodes:
+                        is_current_email = node == current_email_id
+                        network.add_node(
+                            node,
+                            label="Current email" if is_current_email else str(node),
+                            title=f"Email ID: {html.escape(str(node))}",
+                            color="#dc2626" if is_current_email else "#2563eb",
+                            borderWidth=3 if is_current_email else 1,
+                            size=28 if is_current_email else 20,
+                        )
+                    for email_id_a, email_id_b, edge_data in graph.edges(data=True):
+                        edge_reasons = edge_data.get("reasons")
+                        edge_reasons = edge_reasons if isinstance(edge_reasons, list) else []
+                        edge_label = ", ".join(
+                            reason_labels.get(reason, str(reason)) for reason in edge_reasons
+                        ) or "Linked"
+                        network.add_edge(
+                            email_id_a,
+                            email_id_b,
+                            label=edge_label,
+                            title=edge_label,
+                            color="#64748b",
+                        )
+                    st.components.v1.html(network.generate_html(), height=500, scrolling=True)
+                except Exception:
+                    st.info("The interactive cluster graph could not be rendered; use the table below.")
+            elif graph_error:
+                st.info("Persisted campaign edges could not be loaded; use the linked-email table below.")
             else:
-                st.info("This campaign has no linked email identifiers to display yet.")
+                st.info("No persisted campaign edges are available to visualize yet.")
+
+            with st.expander("View as table"):
+                linked_rows = [{"email_id": str(email_id)} for email_id in linked_emails]
+                if linked_rows:
+                    st.dataframe(linked_rows, hide_index=True, use_container_width=True)
+                else:
+                    st.info("This campaign has no linked email identifiers to display yet.")
+                st.caption(
+                    f"{cluster_size} total in cluster ({len(linked_emails)} others + this email)"
+                )
