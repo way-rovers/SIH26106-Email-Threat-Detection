@@ -43,5 +43,14 @@
     "lat": -33.8672,
     "lon": 151.1997,
     "error": ""
+  },
+  "140.82.112.22": {
+    "ip": "140.82.112.22",
+    "country": "United States",
+    "city": "San Francisco",
+    "isp": "GitHub, Inc.",
+    "lat": 37.7823,
+    "lon": -122.391,
+    "error": ""
   }
 }
