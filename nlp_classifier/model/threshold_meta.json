@@ -1,0 +1,37 @@
+{
+  "threshold": 0.1722,
+  "strategy": "lowest_threshold_fpr_le_5pct",
+  "val_metrics": {
+    "precision": 0.956,
+    "recall": 0.999,
+    "f1": 0.977,
+    "fpr": 0.05,
+    "brier_score": 0.0091
+  },
+  "cv_metrics": {
+    "word_only_mean_f1": 0.9851,
+    "word_only_std_f1": 0.0004,
+    "combined_mean_f1": 0.9883,
+    "combined_std_f1": 0.0006,
+    "folds": 5,
+    "cv_type": "StratifiedGroupKFold"
+  },
+  "test_f1": 0.98,
+  "optimistic_f1": 0.9915,
+  "char_ngrams_kept": true,
+  "char_ngrams_rationale": "CV F1 delta: +0.0032 (need >=+0.002). Obfuscation recall delta: -0.0050 (need >=+0.05). KEPT — meets threshold.",
+  "obfuscation_recall_word": 1.0,
+  "obfuscation_recall_combined": 0.995,
+  "calibrated": false,
+  "calibration_rationale": "Brier 0.0091 <= 0.05 — already well-calibrated, no wrapper needed.",
+  "inference_latency_ms": 1.06,
+  "leakage_detected": true,
+  "near_dup_stats": {
+    "pairs_checked": 71791480,
+    "pairs_merged": 45384,
+    "total_groups": 86210,
+    "non_singleton_clusters": 14162,
+    "largest_cluster": 2365
+  },
+  "trained_at": "2026-09-08T07:31:38+00:00"
+}

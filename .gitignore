@@ -241,3 +241,4 @@ Thumbs.db
 nlp_classifier/data/
 nlp_classifier/model/*
 !nlp_classifier/model/classifier.pkl
+!nlp_classifier/model/threshold_meta.json
