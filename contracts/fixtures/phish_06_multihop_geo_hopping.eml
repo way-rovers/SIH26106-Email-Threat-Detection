@@ -1,0 +1,35 @@
+Delivered-To: victim@example.com
+Received: from mail.example.com (mail.example.com [8.8.8.8])
+	by mx.victim-corp.com with ESMTP id aa11bb22cc33
+	for <victim@example.com>; Wed, 09 Sep 2026 10:00:03 +0000
+Received: from relay-us.some-esp.net (relay-us.some-esp.net [140.82.112.22])
+	by mail.example.com with ESMTP id dd44ee55ff66
+	for <victim@example.com>; Wed, 09 Sep 2026 10:00:02 +0000
+Received: from edge-au.forwarding-svc.net (edge-au.forwarding-svc.net [1.1.1.1])
+	by relay-us.some-esp.net with ESMTP id gg77hh88ii99
+	for <victim@example.com>; Wed, 09 Sep 2026 10:00:01 +0000
+Received: from exit-node-de.anon-relay.net (exit-node-de.anon-relay.net [185.220.101.45])
+	by edge-au.forwarding-svc.net with SMTP id jj00kk11ll22
+	for <victim@example.com>; Wed, 09 Sep 2026 10:00:00 +0000
+Authentication-Results: mx.victim-corp.com;
+	spf=fail (does not designate 185.220.101.45 as permitted sender) smtp.mailfrom=security@paypa1-alerts.com;
+	dkim=none (no signature found);
+	dmarc=fail (p=REJECT) header.from=paypa1-alerts.com
+From: "PayPal Security Alert" <security@paypa1-alerts.com>
+Reply-To: case-support@paypal-case-resolution.info
+To: victim@example.com
+Subject: Unusual sign-in activity detected on your account
+Date: Wed, 09 Sep 2026 10:00:00 +0000
+Message-ID: <multihop-geo-001@paypa1-alerts.com>
+MIME-Version: 1.0
+Content-Type: text/plain
+
+Dear Customer,
+
+We detected an unusual sign-in attempt on your account from a new device.
+If this wasn't you, please secure your account immediately by verifying
+your identity.
+
+http://paypa1-alerts.com.case-resolution.info/verify?case=99213
+
+PayPal Security Team

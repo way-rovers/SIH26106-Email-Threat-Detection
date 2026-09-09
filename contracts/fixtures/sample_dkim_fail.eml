@@ -1,0 +1,19 @@
+From: support@bank-of-america.com
+To: john.doe@example.com
+Subject: Your account statement is ready
+Date: Thu, 03 Sep 2026 10:00:00 +0000
+Message-ID: <dkimfail-001@bank-of-america.com>
+Authentication-Results: mx.example.com; spf=pass smtp.mailfrom=bank-of-america.com; dkim=fail header.d=bank-of-america.com; dmarc=pass header.from=bank-of-america.com
+Received: from mail.bank-of-america.com (mail.bank-of-america.com [140.82.112.22])
+        by mx.example.com (Postfix) with ESMTP
+        for <john.doe@example.com>; Thu, 03 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Content-Type: text/plain
+
+Dear John,
+
+Your monthly account statement is now available. Please log in to view it.
+
+Thank you for banking with us.
+
+Bank of America Customer Service
