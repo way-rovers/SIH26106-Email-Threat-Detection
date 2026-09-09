@@ -2,16 +2,26 @@
 
 import hashlib
 import html
+import json
 import math
 import os
+from pathlib import Path
+import re
 import tempfile
 
 import folium
 import streamlit as st
+from dotenv import load_dotenv
+from folium.plugins import AntPath
 from streamlit_folium import st_folium
 
 from dashboard.pipeline import run_pipeline
 from dashboard.scoring import compute_fraud_score
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Streamlit does not load .env files itself; do this before CARTO_API_KEY is read.
+load_dotenv(_PROJECT_ROOT / ".env")
 
 
 def _mapping(value: object) -> dict:
@@ -240,6 +250,7 @@ with domain_geo_tab:
                         "ip": hop_data.get("ip") or "Unknown IP",
                         "country": geo_data.get("country") or "unknown",
                         "city": geo_data.get("city") or "unknown",
+                        "isp": geo_data.get("isp") or "unknown",
                         "lat": lat,
                         "lon": lon,
                     })
@@ -247,31 +258,120 @@ with domain_geo_tab:
         if not plottable_hops:
             st.info("No relay hops have valid geolocation coordinates to plot.")
         else:
-            center_lat = sum(hop.get("lat", 0.0) for hop in plottable_hops) / len(plottable_hops)
-            center_lon = sum(hop.get("lon", 0.0) for hop in plottable_hops) / len(plottable_hops)
-            relay_map = folium.Map(location=[center_lat, center_lon], zoom_start=2, control_scale=True)
-            for hop in plottable_hops:
-                popup = (
-                    f"Hop {html.escape(str(hop.get('hop_index')))}<br>"
-                    f"IP: {html.escape(str(hop.get('ip')))}<br>"
-                    f"Location: {html.escape(str(hop.get('city')))}, {html.escape(str(hop.get('country')))}"
+            coords = [(hop.get("lat"), hop.get("lon")) for hop in plottable_hops]
+            if len(plottable_hops) == 1:
+                relay_map = folium.Map(location=coords[0], tiles=None, zoom_start=6, control_scale=True)
+            else:
+                relay_map = folium.Map(location=[0, 0], tiles=None, control_scale=True)
+
+            carto_key = os.getenv("CARTO_API_KEY", "").strip()
+            if carto_key:
+                carto_tiles = (
+                    "https://basemaps.cartocdn.com/rastertiles/dark_all/"
+                    f"{{z}}/{{x}}/{{y}}.png?key={carto_key}"
                 )
-                folium.Marker(
-                    location=[hop.get("lat"), hop.get("lon")],
+                folium.TileLayer(
+                    tiles=carto_tiles,
+                    attr="&copy; CARTO",
+                    name="CartoDB Dark Matter",
+                    no_wrap=True,
+                ).add_to(relay_map)
+            else:
+                folium.TileLayer(tiles="OpenStreetMap", no_wrap=True).add_to(relay_map)
+
+            marker_colours = {"origin": "#e74c3c", "intermediate": "#3498db", "destination": "#2ecc71"}
+            for marker_index, hop in enumerate(plottable_hops):
+                if marker_index == 0:
+                    role = "origin"
+                elif marker_index == len(plottable_hops) - 1:
+                    role = "destination"
+                else:
+                    role = "intermediate"
+                marker_colour = marker_colours.get(role, "#3498db")
+                popup = (
+                    f"<b>Hop {html.escape(str(hop.get('hop_index')))} — {role.capitalize()}</b><br>"
+                    f"IP: {html.escape(str(hop.get('ip')))}<br>"
+                    f"Country: {html.escape(str(hop.get('country')))}<br>"
+                    f"City: {html.escape(str(hop.get('city')))}<br>"
+                    f"ISP: {html.escape(str(hop.get('isp') or 'unknown'))}"
+                )
+                folium.CircleMarker(
+                    location=(hop.get("lat"), hop.get("lon")),
+                    radius=10 if role == "origin" else 8,
+                    color=marker_colour,
+                    fill=True,
+                    fill_color=marker_colour,
+                    fill_opacity=0.9,
                     popup=folium.Popup(popup, max_width=280),
-                    tooltip=f"Hop {hop.get('hop_index')}: {hop.get('ip')}",
+                    tooltip=f"Hop {hop.get('hop_index')}: {hop.get('city')}, {hop.get('country')}",
                 ).add_to(relay_map)
             if len(plottable_hops) >= 2:
-                folium.PolyLine(
-                    [(hop.get("lat"), hop.get("lon")) for hop in plottable_hops],
-                    color="#2563eb",
+                AntPath(
+                    locations=coords,
+                    color="#f39c12",
                     weight=3,
-                    opacity=0.75,
+                    opacity=0.8,
+                    delay=800,
+                    dash_array=[10, 20],
+                    pulse_color="#ffffff",
                 ).add_to(relay_map)
+                relay_map.fit_bounds(coords)
             st_folium(relay_map, use_container_width=True, height=440, key="relay_path_map")
 
 with content_tab:
-    st.info("Coming soon")
+    content_record = _mapping(st.session_state.get("pipeline_result"))
+    content_parsed = _mapping(content_record.get("parsed"))
+    if not content_record or analysis_error:
+        st.info("Upload a .eml file above to inspect its content-analysis signals.")
+    else:
+        st.subheader("Classifier result")
+        nlp = _mapping(content_record.get("nlp"))
+        label = str(nlp.get("label") or "unavailable")
+        confidence = min(max(_score_value(nlp.get("confidence")), 0.0), 1.0)
+        st.metric("Classification confidence", f"{confidence:.0%} confidence in {label}")
+
+        threshold_path = Path(__file__).resolve().parent.parent / "nlp_classifier" / "model" / "threshold_meta.json"
+        try:
+            with threshold_path.open("r", encoding="utf-8") as threshold_file:
+                threshold_meta = _mapping(json.load(threshold_file))
+            trained_threshold = threshold_meta.get("threshold")
+            threshold_display = f"{float(trained_threshold):.4f}"
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            threshold_display = "threshold unavailable"
+        st.caption(f"Active trained classification threshold: {threshold_display}")
+
+        st.subheader("Email body and influential terms")
+        body_text = content_parsed.get("body_text")
+        body_text = body_text if isinstance(body_text, str) else ""
+        top_words_value = nlp.get("top_words")
+        top_words = []
+        if isinstance(top_words_value, list):
+            seen_words = set()
+            for word in top_words_value:
+                if isinstance(word, str) and word.strip() and word.casefold() not in seen_words:
+                    top_words.append(word.strip())
+                    seen_words.add(word.casefold())
+
+        if not body_text:
+            st.info("No body text was available for content analysis.")
+        elif not top_words:
+            st.text(body_text)
+        else:
+            # Longer words win overlapping matches; each original fragment is
+            # HTML-escaped before Streamlit renders the inline highlighting.
+            word_pattern = re.compile(
+                "(" + "|".join(re.escape(word) for word in sorted(top_words, key=len, reverse=True)) + ")",
+                flags=re.IGNORECASE,
+            )
+            body_parts = word_pattern.split(body_text)
+            highlighted_body = "".join(
+                f"<mark><strong>{html.escape(part)}</strong></mark>" if index % 2 else html.escape(part)
+                for index, part in enumerate(body_parts)
+            )
+            st.markdown(
+                f"<div style='white-space: pre-wrap; line-height: 1.6;'>{highlighted_body}</div>",
+                unsafe_allow_html=True,
+            )
 
 with campaign_tab:
     st.info("Coming soon")
