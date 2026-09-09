@@ -374,4 +374,47 @@ with content_tab:
             )
 
 with campaign_tab:
-    st.info("Coming soon")
+    campaign_record = _mapping(st.session_state.get("pipeline_result"))
+    if not campaign_record or analysis_error:
+        st.info("Upload a .eml file above to inspect campaign clustering information.")
+    else:
+        correlation = _mapping(campaign_record.get("correlation"))
+        campaign_id = correlation.get("campaign_id")
+        if campaign_id is None:
+            st.info(
+                "No campaign link found — this email was not clustered with any previously processed email."
+            )
+        else:
+            st.subheader("Campaign cluster")
+            campaign_column, size_column = st.columns(2)
+            campaign_column.metric("Campaign ID", str(campaign_id))
+            size_column.metric("Cluster size", correlation.get("cluster_size") or "Unavailable")
+            st.caption(
+                "Campaign clustering describes shared infrastructure or impersonation signals; "
+                "it does not determine this email's verdict."
+            )
+
+            reason_labels = {
+                "same_origin_ip": "Same origin IP",
+                "same_ip_block": "Same IP block",
+                "same_impersonated_domain": "Same impersonated domain",
+            }
+            match_reason_value = correlation.get("match_reason")
+            match_reasons = match_reason_value if isinstance(match_reason_value, list) else []
+            displayed_reasons = [
+                reason_labels.get(reason, str(reason))
+                for reason in match_reasons
+            ]
+            st.write(
+                "**Cluster match reason(s):** "
+                + (", ".join(displayed_reasons) if displayed_reasons else "No reason recorded")
+            )
+
+            st.subheader("Linked emails")
+            linked_emails_value = correlation.get("linked_emails")
+            linked_emails = linked_emails_value if isinstance(linked_emails_value, list) else []
+            linked_rows = [{"email_id": str(email_id)} for email_id in linked_emails]
+            if linked_rows:
+                st.dataframe(linked_rows, hide_index=True, use_container_width=True)
+            else:
+                st.info("This campaign has no linked email identifiers to display yet.")
