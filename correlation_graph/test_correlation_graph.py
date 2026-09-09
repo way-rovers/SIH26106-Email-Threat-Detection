@@ -220,3 +220,39 @@ def test_reprocessing_linked_emails_does_not_duplicate_edges(tmp_path):
     assert repeated_result["campaign_id"] == initial_result["campaign_id"]
     assert initial_result["cluster_size"] == 2
     assert repeated_result["cluster_size"] == initial_result["cluster_size"]
+
+
+def test_legacy_duplicate_edges_are_deduplicated_before_unique_index(tmp_path):
+    db_path = str(tmp_path / "campaigns.db")
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE emails (
+                email_id TEXT PRIMARY KEY, sender_domain TEXT, origin_ip TEXT,
+                impersonated_domain TEXT, campaign_id TEXT, raw_record TEXT
+            );
+            CREATE TABLE edges (
+                email_id_a TEXT, email_id_b TEXT, reason TEXT
+            );
+            """
+        )
+        connection.executemany(
+            "INSERT INTO emails (email_id, origin_ip) VALUES (?, ?)",
+            [("email-a", "1.1.1.1"), ("email-b", "1.1.1.1")],
+        )
+        connection.executemany(
+            "INSERT INTO edges VALUES (?, ?, ?)",
+            [
+                ("email-a", "email-b", "same_origin_ip"),
+                ("email-a", "email-b", "same_origin_ip"),
+            ],
+        )
+
+    result = correlate(_record("email-a", "1.1.1.1"), db_path)
+    with sqlite3.connect(db_path) as connection:
+        edge_count = connection.execute("SELECT COUNT(*) FROM edges").fetchone()[0]
+
+    assert result["campaign_id"] == "email-a"
+    assert result["linked_emails"] == ["email-b"]
+    assert result["cluster_size"] == 2
+    assert edge_count == 2

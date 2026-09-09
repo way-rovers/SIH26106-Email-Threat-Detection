@@ -162,6 +162,25 @@ def _cluster_result(connection: sqlite3.Connection, email_id: str) -> dict:
     }
 
 
+def _deduplicate_legacy_edges(connection: sqlite3.Connection) -> None:
+    """Remove exact duplicate legacy edges before adding the unique index."""
+    edges_table_exists = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'edges'"
+    ).fetchone()
+    if edges_table_exists is None:
+        return
+    connection.execute(
+        """
+        DELETE FROM edges
+        WHERE rowid NOT IN (
+            SELECT MIN(rowid)
+            FROM edges
+            GROUP BY email_id_a, email_id_b, reason
+        )
+        """
+    )
+
+
 def open_connection(db_path: str) -> Optional[sqlite3.Connection]:
     """Open *db_path* and initialise the correlation tables if necessary.
 
@@ -176,6 +195,7 @@ def open_connection(db_path: str) -> Optional[sqlite3.Connection]:
             database_path.parent.mkdir(parents=True, exist_ok=True)
 
         connection = sqlite3.connect(str(database_path))
+        _deduplicate_legacy_edges(connection)
         with _SCHEMA_PATH.open(encoding="utf-8") as schema_file:
             connection.executescript(schema_file.read())
         return connection
