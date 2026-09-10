@@ -462,20 +462,37 @@ st.set_page_config(page_title="Email Threat Detection", page_icon="🛡️", lay
 st.title("🛡️ Email Threat Detection Platform")
 st.caption("Upload a raw .eml file to inspect email threat signals.")
 
+upload_widget_nonce = st.session_state.get("upload_widget_nonce", 0)
+if not isinstance(upload_widget_nonce, int):
+    upload_widget_nonce = 0
+    st.session_state["upload_widget_nonce"] = upload_widget_nonce
+
 uploaded_file = st.file_uploader(
     "Upload a .eml file",
     type=["eml"],
     help="Drag and drop or browse for an RFC 822 .eml message.",
+    key=f"uploaded_email_{upload_widget_nonce}",
 )
 
-if uploaded_file is not None:
+clear_uploaded_emails = st.button(
+    "Clear uploaded emails",
+    help="Clears only this browser session's uploaded-email list. Correlation history is unchanged.",
+)
+if clear_uploaded_emails:
+    st.session_state.pop("uploaded_results", None)
+    st.session_state.pop("upload_id", None)
+    st.session_state.pop("analysis_source", None)
+    st.session_state["upload_widget_nonce"] = upload_widget_nonce + 1
+    st.rerun()
+
+if uploaded_file is not None and not clear_uploaded_emails:
     file_bytes = uploaded_file.getvalue()
     upload_id = hashlib.sha256(file_bytes).hexdigest()
     if st.session_state.get("upload_id") != upload_id:
         st.session_state["upload_id"] = upload_id
-        st.session_state.pop("pipeline_result", None)
-        st.session_state.pop("score_result", None)
-        st.session_state.pop("analysis_error", None)
+        upload_record = {}
+        upload_score = {}
+        upload_error = None
 
         temp_path = ""
         try:
@@ -483,28 +500,71 @@ if uploaded_file is not None:
                 temporary_file.write(file_bytes)
                 temp_path = temporary_file.name
             try:
-                st.session_state["pipeline_result"] = run_pipeline(temp_path)
+                upload_record = _mapping(run_pipeline(temp_path))
             except Exception as error:
-                st.session_state["analysis_error"] = f"Pipeline analysis failed: {error}"
+                upload_error = f"Pipeline analysis failed: {error}"
             else:
                 try:
-                    st.session_state["score_result"] = compute_fraud_score(
-                        st.session_state.get("pipeline_result")
-                    )
+                    upload_score = _mapping(compute_fraud_score(upload_record))
                 except Exception as error:
-                    st.session_state["analysis_error"] = f"Fraud-score calculation failed: {error}"
+                    upload_error = f"Fraud-score calculation failed: {error}"
         except Exception as error:
-            st.session_state["analysis_error"] = f"Could not prepare the uploaded email: {error}"
+            upload_error = f"Could not prepare the uploaded email: {error}"
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.unlink(temp_path)
+
+        uploaded_results_value = st.session_state.get("uploaded_results")
+        uploaded_results = uploaded_results_value if isinstance(uploaded_results_value, list) else []
+        upload_filename = uploaded_file.name
+        existing_filenames = {str(item.get("filename", "")) for item in uploaded_results}
+        if upload_filename in existing_filenames:
+            suffix = 2
+            while f"{upload_filename} ({suffix})" in existing_filenames:
+                suffix += 1
+            upload_filename = f"{upload_filename} ({suffix})"
+        uploaded_results.append({
+            "filename": upload_filename,
+            "record": upload_record,
+            "score": upload_score,
+            "error": upload_error,
+        })
+        st.session_state["uploaded_results"] = uploaded_results
 else:
     st.session_state.pop("upload_id", None)
-    st.session_state.pop("pipeline_result", None)
-    st.session_state.pop("score_result", None)
-    st.session_state.pop("analysis_error", None)
 
 st.divider()
+with st.expander("Advanced"):
+    st.warning(
+        "Resetting the campaign database removes all correlation history, including the planted "
+        "campaign-fixture linkage, until Run all fixtures is run again."
+    )
+    confirm_campaign_reset = st.checkbox(
+        "I understand that this removes all persisted correlation history.",
+        key="confirm_campaign_reset",
+    )
+    if st.button("Reset campaign database", disabled=not confirm_campaign_reset):
+        campaigns_db = _PROJECT_ROOT / "data" / "campaigns.db"
+        try:
+            with sqlite3.connect(campaigns_db) as connection:
+                connection.execute("DELETE FROM edges")
+                connection.execute("DELETE FROM emails")
+                connection.commit()
+                connection.execute("VACUUM")
+        except (OSError, sqlite3.Error) as error:
+            st.error(f"Could not reset the campaign database: {error}")
+        else:
+            st.session_state.pop("uploaded_results", None)
+            st.session_state.pop("batch_results", None)
+            st.session_state.pop("upload_id", None)
+            st.session_state.pop("analysis_source", None)
+            st.session_state["upload_widget_nonce"] = upload_widget_nonce + 1
+            st.session_state["campaign_reset_success"] = True
+            st.rerun()
+
+if st.session_state.pop("campaign_reset_success", False):
+    st.success("Campaign database reset. Run all fixtures to restore the campaign-demo linkage.")
+
 st.subheader("Judge batch demo")
 batch_summary = st.empty()
 if st.button("Run all fixtures", type="secondary"):
@@ -546,6 +606,8 @@ if st.button("Run all fixtures", type="secondary"):
 
 batch_results_value = st.session_state.get("batch_results")
 batch_results = batch_results_value if isinstance(batch_results_value, list) else []
+uploaded_results_value = st.session_state.get("uploaded_results")
+uploaded_results = uploaded_results_value if isinstance(uploaded_results_value, list) else []
 if batch_results:
     summary_rows = [{
         "filename": item.get("filename", ""),
@@ -553,31 +615,44 @@ if batch_results:
         "score": _mapping(item.get("score")).get("score", "—"),
     } for item in batch_results]
     batch_summary.dataframe(summary_rows, hide_index=True, use_container_width=True)
-    source_options = ["Current uploaded email"] + [str(item.get("filename", "")) for item in batch_results]
+if uploaded_results or batch_results:
+    source_options = (
+        ["Current uploaded email"]
+        + [str(item.get("filename", "")) for item in uploaded_results]
+        + [str(item.get("filename", "")) for item in batch_results]
+    )
     selected_source = st.selectbox(
         "View details in all five tabs",
         source_options,
         key="analysis_source",
-        help="Choose a batch fixture to open it in the same five-tab dashboard below.",
+        help="Choose an uploaded email or batch fixture to open it in the same five-tab dashboard below.",
     )
 else:
     selected_source = "Current uploaded email"
 
-normal_record = _mapping(st.session_state.get("pipeline_result"))
-normal_score = _mapping(st.session_state.get("score_result"))
-normal_error = st.session_state.get("analysis_error")
-active_record = normal_record
-active_score = normal_score
-active_error = normal_error
+current_upload = uploaded_results[-1] if uploaded_results else {}
+active_record = _mapping(current_upload.get("record"))
+active_score = _mapping(current_upload.get("score"))
+active_error = current_upload.get("error")
 if selected_source != "Current uploaded email":
-    selected_batch = next(
-        (item for item in batch_results if item.get("filename") == selected_source),
-        {},
+    selected_upload = next(
+        (item for item in uploaded_results if item.get("filename") == selected_source),
+        None,
     )
-    active_record = _mapping(selected_batch.get("record"))
-    active_score = _mapping(selected_batch.get("score"))
-    active_error = selected_batch.get("error")
-    st.caption(f"Viewing batch fixture: {selected_source}")
+    if selected_upload is not None:
+        active_record = _mapping(selected_upload.get("record"))
+        active_score = _mapping(selected_upload.get("score"))
+        active_error = selected_upload.get("error")
+        st.caption(f"Viewing uploaded email: {selected_source}")
+    else:
+        selected_batch = next(
+            (item for item in batch_results if item.get("filename") == selected_source),
+            {},
+        )
+        active_record = _mapping(selected_batch.get("record"))
+        active_score = _mapping(selected_batch.get("score"))
+        active_error = selected_batch.get("error")
+        st.caption(f"Viewing batch fixture: {selected_source}")
 
 if active_error:
     st.error(str(active_error))
