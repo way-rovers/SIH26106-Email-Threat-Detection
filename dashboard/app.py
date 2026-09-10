@@ -431,10 +431,15 @@ def render_campaign_tab(record: dict, score_result: dict) -> None:
             for email_id_a, email_id_b, edge_data in graph.edges(data=True):
                 edge_reasons = edge_data.get("reasons")
                 edge_reasons = edge_reasons if isinstance(edge_reasons, list) else []
-                edge_label = ", ".join(
+                edge_tooltip = " | ".join(
                     reason_labels.get(reason, str(reason)) for reason in edge_reasons
                 ) or "Linked"
-                network.add_edge(email_id_a, email_id_b, label=edge_label, title=edge_label, color="#64748b")
+                network.add_edge(
+                    email_id_a,
+                    email_id_b,
+                    title=html.escape(edge_tooltip),
+                    color="#64748b",
+                )
             st.components.v1.html(network.generate_html(), height=500, scrolling=True)
         except Exception:
             st.info("The interactive cluster graph could not be rendered; use the table below.")
