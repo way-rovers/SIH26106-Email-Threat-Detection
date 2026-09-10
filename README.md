@@ -1,4 +1,4 @@
-# SIH26106 — Email Threat Detection Platform
+# SIH26106 — Sentinel Mail
 
 An email forensics platform that takes a raw `.eml` file and produces a
 fraud verdict backed by four independent signals: **cryptographic header

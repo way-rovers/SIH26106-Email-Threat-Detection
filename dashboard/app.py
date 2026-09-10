@@ -1,4 +1,4 @@
-"""Streamlit UI for the Email Threat Detection dashboard."""
+"""Streamlit UI for the Sentinel Mail dashboard."""
 
 import hashlib
 import html
@@ -458,8 +458,8 @@ def render_campaign_tab(record: dict, score_result: dict) -> None:
         st.caption(f"{cluster_size} total in cluster ({len(linked_emails)} others + this email)")
 
 
-st.set_page_config(page_title="Email Threat Detection", page_icon="🛡️", layout="wide")
-st.title("🛡️ Email Threat Detection Platform")
+st.set_page_config(page_title="Sentinel Mail", page_icon="🛡️", layout="wide")
+st.title("🛡️ Sentinel Mail")
 st.caption("Upload a raw .eml file to inspect email threat signals.")
 
 upload_widget_nonce = st.session_state.get("upload_widget_nonce", 0)
